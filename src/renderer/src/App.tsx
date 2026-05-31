@@ -392,7 +392,9 @@ function LogoMark() {
 }
 
 function ProjectAvatar(props: { name: string }) {
-  return <div className="conversation-avatar project-avatar"><span>{props.name.slice(0, 1).toUpperCase()}</span></div>;
+  // 项目名以 . 开头时，首字符头像会只显示一个点；跳过前导点/空白，保证隐藏目录也能显示可识别的业务名称首字母。
+  const avatarText = props.name.replace(/^[.\s]+/, "").slice(0, 1).toUpperCase() || "π";
+  return <div className="conversation-avatar project-avatar"><span>{avatarText}</span></div>;
 }
 
 function AgentAvatar(props: { status: string }) {
