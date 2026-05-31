@@ -359,18 +359,22 @@ export function App() {
 
       <main className="chat-pane">
         <header className="chat-header">
-          <div>
-            <strong>{activeAgent?.title ?? activeProject?.name ?? "pi desktop"}</strong>
-            <span>{activeAgent ? `${activeAgent.status} · ${displayPath(activeProject?.path ?? activeAgent.cwd)}` : "选择项目并创建 Agent"}</span>
+          <div className="chat-title-block">
+            <strong title={activeAgent?.title ?? activeProject?.name ?? "pi desktop"}>{activeAgent?.title ?? activeProject?.name ?? "pi desktop"}</strong>
+            <span title={activeAgent ? `${activeAgent.status} · ${activeProject?.path ?? activeAgent.cwd}` : "选择项目并创建 Agent"}>{activeAgent ? `${activeAgent.status} · ${displayPath(activeProject?.path ?? activeAgent.cwd)}` : "选择项目并创建 Agent"}</span>
             <SessionStatus state={activeRuntimeState} />
           </div>
           <div className="chat-header-actions">
-            <BranchSelector gitInfo={gitInfo} onSwitch={switchBranch} />
-            <button disabled={!activeAgentId} onClick={() => activeAgentId && api.agents.prompt({ agentId: activeAgentId, message: "/reload" })}>Reload</button>
-            <button disabled={!activeAgentId || activeAgent?.status !== "running"} onClick={() => abortAgent()}>Stop</button>
-            <button disabled={!activeProjectId} onClick={() => createAgent()}>New Agent</button>
-            <button className={drawer === "files" ? "active" : ""} onClick={() => { setDrawerCollapsed(false); openDrawer("files"); }}>Files</button>
-            <button className={drawer === "sessions" ? "active" : ""} onClick={() => { setDrawerCollapsed(false); openDrawer("sessions"); }}>History</button>
+            <div className="header-action-group branch-group"><BranchSelector gitInfo={gitInfo} onSwitch={switchBranch} /></div>
+            <div className="header-action-group session-group">
+              <button className="primary-action" disabled={!activeProjectId} onClick={() => createAgent()} title="Start a new pi session">New Session</button>
+              <button disabled={!activeAgentId || activeAgent?.status !== "running"} onClick={() => abortAgent()}>Stop</button>
+              <button disabled={!activeAgentId} onClick={() => activeAgentId && api.agents.prompt({ agentId: activeAgentId, message: "/reload" })}>Reload</button>
+            </div>
+            <div className="header-action-group panel-group">
+              <button className={drawer === "files" ? "active" : ""} onClick={() => { setDrawerCollapsed(false); openDrawer("files"); }}>Files</button>
+              <button className={drawer === "sessions" ? "active" : ""} onClick={() => { setDrawerCollapsed(false); openDrawer("sessions"); }}>History</button>
+            </div>
           </div>
         </header>
 
