@@ -4,6 +4,12 @@
 
 All notable changes to pi-desktop are documented here.
 
+## v0.1.8 - 2026-06-01
+
+### Improved
+- Chat links now open in the system default browser instead of navigating inside the Electron window.
+- All projects show their agent lists by default when switching projects; added per-project collapse/expand toggle.
+
 ## v0.1.7 - 2026-06-01
 
 ### Improved
