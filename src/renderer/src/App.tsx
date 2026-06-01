@@ -1605,38 +1605,56 @@ function buildOutline(messages: ChatMessage[]) {
 }
 
 function summarizeMessage(text: string) {
+	// 过滤 ANSI 转义码，避免 outline 标题显示乱码
+	const cleaned = text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 	const firstLine =
-		text
+		cleaned
 			.replace(/```[\s\S]*?```/g, " ")
 			.split(/\r?\n/)
 			.map((line) => line.trim())
 			.find(Boolean) ?? "";
-	return firstLine.length > 34 ? `${firstLine.slice(0, 34)}…` : firstLine;
+	return firstLine.length > 48 ? `${firstLine.slice(0, 48)}…` : firstLine;
 }
 
 function ConversationOutline(props: {
 	items: Array<{ id: string; role: string; title: string; time: string }>;
 	onJump: (id: string) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
+	const visibleItems = expanded ? props.items : props.items.slice(-15);
+	const hasMore = props.items.length > 15;
 	return (
 		<div className="outline-hover">
-			<button className="outline-trigger" title="会话定位">
+			<button className="outline-trigger" title={`会话定位 · ${props.items.length} 条`}>
 				☰
 			</button>
 			<nav className="conversation-outline">
-				<div className="outline-title">会话定位</div>
-				{props.items.slice(-10).map((item) => (
-					<button
-						key={item.id}
-						className={
-							item.role === "user" ? "outline-user" : "outline-assistant"
-						}
-						onClick={() => props.onJump(item.id)}
-					>
-						<strong>{item.title}</strong>
-						<span>{item.time}</span>
-					</button>
-				))}
+				<div className="outline-title">
+					会话定位
+					<span className="outline-count">{props.items.length}</span>
+				</div>
+				<div className="outline-list">
+					{hasMore && !expanded && (
+						<button
+							className="outline-expand"
+							onClick={() => setExpanded(true)}
+						>
+							显示全部 {props.items.length} 条
+						</button>
+					)}
+					{visibleItems.map((item) => (
+						<button
+							key={item.id}
+							className={
+								item.role === "user" ? "outline-user" : "outline-assistant"
+							}
+							onClick={() => props.onJump(item.id)}
+						>
+							<strong>{item.title}</strong>
+							<span>{item.time}</span>
+						</button>
+					))}
+				</div>
 			</nav>
 		</div>
 	);
