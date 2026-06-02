@@ -14,6 +14,21 @@
 
 ---
 
+## 📋 Changelog
+
+> **Latest: v0.4.0** (2026-06-02)
+
+### v0.4.0 Added
+- 🖼️ Image support: paste images from clipboard (Ctrl+V) or drag and drop into chat composer
+- 👁️ Image preview in user messages with click-to-zoom fullscreen viewer
+- 📜 History session image restoration: images from previous sessions now display correctly
+- 🔔 Session end notification: system notification when agent finishes responding
+- ⚡ Large image auto-compression: images resized to 2000px max edge
+
+[View Full Changelog →](CHANGELOG.md)
+
+---
+
 ## Key Features
 
 | Feature | Description |
