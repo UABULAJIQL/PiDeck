@@ -72,6 +72,10 @@ export function App() {
 	const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
 	const [modelPickerOpen, setModelPickerOpen] = useState(false);
 	const [prompt, setPrompt] = useState("");
+	/** 键盘上下键切换的历史消息列表 */
+	const [messageHistory, setMessageHistory] = useState<string[]>([]);
+	/** 当前在历史中的索引，-1 表示新输入 */
+	const [historyIndex, setHistoryIndex] = useState(-1);
 	const [attachedImages, setAttachedImages] = useState<ImageContent[]>([]);
 	const [pendingPrompts, setPendingPrompts] = useState<PendingPrompt[]>([]);
 	const [previewImage, setPreviewImage] = useState<ImageContent | null>(null);
@@ -295,6 +299,24 @@ export function App() {
 		});
 	}, [activeAgentId, activeMessages.length]);
 
+	// 监听用户发送消息的编辑事件，将消息填入输入框
+	useEffect(() => {
+		const handler = (event: Event) => {
+			const detail = (event as CustomEvent<{ text: string }>).detail;
+			if (detail?.text) {
+				setPrompt(detail.text);
+				// 自动聚焦到输入框
+				requestAnimationFrame(() => {
+					document
+						.querySelector<HTMLTextAreaElement>(".composer-box textarea")
+						?.focus();
+				});
+			}
+		};
+		window.addEventListener("user-message-edit", handler);
+		return () => window.removeEventListener("user-message-edit", handler);
+	}, []);
+
 	useEffect(() => {
 		if (!activeProjectId) {
 			setFiles([]);
@@ -473,6 +495,29 @@ export function App() {
 			setPrompt((current) => clearSuggestionTrigger(current));
 			setSuggestionsOpen(false);
 		}
+		// 上下键切换历史消息：类似 CLI，将之前发送过的消息填入输入框
+		if (event.key === "ArrowUp" && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+			event.preventDefault();
+			const nextIndex = Math.min(historyIndex + 1, messageHistory.length - 1);
+			if (nextIndex !== historyIndex && messageHistory[nextIndex]) {
+				setPrompt(messageHistory[nextIndex]);
+				setHistoryIndex(nextIndex);
+			}
+			return;
+		}
+		if (event.key === "ArrowDown" && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+			event.preventDefault();
+			if (historyIndex > 0) {
+				const nextIndex = historyIndex - 1;
+				setPrompt(messageHistory[nextIndex]);
+				setHistoryIndex(nextIndex);
+			} else if (historyIndex === 0) {
+				// 回到最顶上时清空输入框
+				setPrompt("");
+				setHistoryIndex(-1);
+			}
+			return;
+		}
 		if (event.key !== "Enter") return;
 
 		const shouldSend =
@@ -531,6 +576,11 @@ export function App() {
 		}
 
 		await api.agents.prompt({ agentId: activeAgentId, message, images });
+		// 发送成功后记录到历史，供上下键切换复用
+		if (message) {
+			setMessageHistory((current) => [message.trim(), ...current]);
+			setHistoryIndex(-1);
+		}
 	}
 
 	/**
@@ -1085,24 +1135,9 @@ export function App() {
 					)}
 					{activeAgent && (
 						<div className="message-list">
-							{isAwaitingAssistant &&
-								!renderedMessages.some((m) => m.kind === "response-group") && (
-									<ThinkingBubble
-										thinking={activeThinking}
-										showThinking={settings.showThinking}
-									/>
-								)}
 							{renderedMessages.map((item) =>
 								item.kind === "tool-group" ? (
 									<ToolGroup key={item.id} group={item} />
-								) : item.kind === "response-group" ? (
-									<ResponseBubble
-										key={item.id}
-										group={item}
-										onPreviewImage={setPreviewImage}
-										showThinking={settings.showThinking}
-										streamingThinking={activeThinking}
-									/>
 								) : (
 									<ChatBubble
 										key={item.message.id}
@@ -1111,6 +1146,12 @@ export function App() {
 										showThinking={settings.showThinking}
 									/>
 								),
+							)}
+							{isAwaitingAssistant && (
+								<ThinkingBubble
+									thinking={activeThinking}
+									showThinking={settings.showThinking}
+								/>
 							)}
 							{pendingPrompts.map((prompt) => (
 								<PendingBubble
@@ -1784,67 +1825,31 @@ type ToolGroupItem = {
 	messages: ChatMessage[];
 };
 
-/** 一次 agent 响应（assistant 文字 + 工具调用）合并为一个 response-group，避免被拆成多个气泡。 */
-type ResponseGroupItem = {
-	kind: "response-group";
-	id: string;
-	/** 该轮响应里所有 assistant 文字合并后的内容 */
-	text: string;
-	/** 该轮响应里的工具调用消息（保持原始顺序） */
-	tools: ChatMessage[];
-	/** 该轮响应里第一条 assistant 消息的思考内容（如果有） */
-	thinking?: string;
-};
-
-type RenderMessage =
-	| { kind: "message"; message: ChatMessage }
-	| ToolGroupItem
-	| ResponseGroupItem;
+type RenderMessage = { kind: "message"; message: ChatMessage } | ToolGroupItem;
 
 function groupToolMessages(messages: ChatMessage[]): RenderMessage[] {
 	const result: RenderMessage[] = [];
-	// 收集当前轮次里所有非用户消息（assistant 文字 + tool 调用），等遇到下一条用户消息或消息列表末尾时合并成一个 response-group
-	const pendingText: string[] = [];
-	const pendingTools: ChatMessage[] = [];
-	let pendingThinking: string | undefined;
+	let current: ChatMessage[] = [];
 
-	function flushResponse() {
-		if (pendingText.length === 0 && pendingTools.length === 0) return;
+	function flush() {
+		if (current.length === 0) return;
+		// 同一轮问答里的连续 tool 消息聚合显示，减少工具调用刷屏；详情仍保留在每条 tool 的 meta 里可展开查看。
 		result.push({
-			kind: "response-group",
-			id: [
-				...pendingText.map((t) => `t:${t}`),
-				...pendingTools.map((m) => m.id),
-			].join("|"),
-			text: pendingText.join("\n\n"),
-			// 必须 .slice() 复制，避免后续 pendingTools.length = 0 原地清空同一个数组引用。
-			tools: pendingTools.slice(),
-			thinking: pendingThinking,
+			kind: "tool-group",
+			id: current.map((message) => message.id).join("|"),
+			messages: current,
 		});
-		pendingText.length = 0;
-		pendingTools.length = 0;
-		pendingThinking = undefined;
+		current = [];
 	}
 
 	for (const message of messages) {
-		if (message.role === "user") {
-			flushResponse();
-			result.push({ kind: "message", message });
-		} else if (message.role === "assistant") {
-			if (message.text) pendingText.push(message.text);
-			// 只取第一条 assistant 消息的思考内容，避免同一轮多次 thinking 重复
-			if (!pendingThinking && message.thinking) {
-				pendingThinking = message.thinking;
-			}
-		} else if (message.role === "tool") {
-			pendingTools.push(message);
-		} else {
-			// system / error 等其他角色： flush 后作为独立消息渲染
-			flushResponse();
+		if (message.role === "tool") current.push(message);
+		else {
+			flush();
 			result.push({ kind: "message", message });
 		}
 	}
-	flushResponse();
+	flush();
 	return result;
 }
 
@@ -1993,108 +1998,6 @@ function ToolSummary(props: { message: ChatMessage }) {
 	);
 }
 
-/** 一次 agent 响应的合并渲染：assistant 文字 + 工具调用放在同一个气泡里，避免被拆成多条消息。 */
-function ResponseBubble(props: {
-	group: ResponseGroupItem;
-	onPreviewImage: (image: ImageContent) => void;
-	showThinking?: boolean;
-	/** 流式过程中的实时 thinking 内容，在 group.thinking 尚未生成时填充 thinking 块 */
-	streamingThinking?: string;
-}) {
-	const { group } = props;
-	const [expanded, setExpanded] = useState(false);
-	const [thinkingExpanded, setThinkingExpanded] = useState(false);
-	const cleanText = stripAnsi(group.text);
-	// 使用累计 thinking（历史）或流式 thinking（实时），确保响应过程中 thinking 块始终有内容
-	const thinkingContent = group.thinking || props.streamingThinking || "";
-	const hasThinking = props.showThinking && thinkingContent.length > 0;
-	const thinkingPreviewLen = 200;
-	const thinkingNeedsTruncate = thinkingContent.length > thinkingPreviewLen;
-	const thinkingDisplayText =
-		thinkingExpanded || !thinkingNeedsTruncate
-			? thinkingContent
-			: thinkingContent.slice(0, thinkingPreviewLen) + "...";
-	const running =
-		group.tools.length > 0 &&
-		group.tools[group.tools.length - 1].meta?.status === "running";
-	const failed = group.tools.some(
-		(m) => m.meta?.status === "error" || m.meta?.isError === true,
-	);
-	const firstToolTime = group.tools[0]?.timestamp;
-
-	return (
-		<article className="chat-message assistant" data-message-id={group.id}>
-			<div className="msg-avatar">P</div>
-			<div className="msg-content">
-				<div className="msg-name">
-					<span>pi</span>
-					<time>{firstToolTime ? formatTime(firstToolTime) : ""}</time>
-				</div>
-				{/* 思考过程：与 ChatBubble 里的 thinking 展示保持一致 */}
-				{hasThinking && (
-					<div className="thinking-block">
-						<div
-							className="thinking-header"
-							onClick={() => setThinkingExpanded((v) => !v)}
-						>
-							<Brain size={14} />
-							<span>思考过程</span>
-							<em>{thinkingExpanded ? "收起" : "展开"}</em>
-						</div>
-						{thinkingExpanded && (
-							<div className="thinking-content">{thinkingDisplayText}</div>
-						)}
-						{thinkingNeedsTruncate && !thinkingExpanded && (
-							<button
-								className="thinking-toggle"
-								onClick={() => setThinkingExpanded(true)}
-							>
-								展开全部
-							</button>
-						)}
-					</div>
-				)}
-				{/* 工具调用放在思考下方、回答上方。 */}
-				{group.tools.length > 0 && (
-					<div className="tool-group">
-						<button
-							className="tool-group-header"
-							onClick={() => setExpanded((v) => !v)}
-						>
-							<span>
-								{running
-									? "工具调用中"
-									: failed
-										? "工具调用有错误"
-										: "调用完成"}
-							</span>
-							<strong>{group.tools.length} 条</strong>
-							<em>{expanded ? "收起" : "展开"}</em>
-						</button>
-						{expanded && (
-							<div className="tool-group-list">
-								{group.tools.map((message) => (
-									<ToolSummary key={message.id} message={message} />
-								))}
-							</div>
-						)}
-					</div>
-				)}
-				{/* 回答文字放在最底部。 */}
-				{cleanText && (
-					<div className="msg-bubble">
-						<ReactMarkdown
-							remarkPlugins={[remarkGfm]}
-							components={{ pre: CodeBlock, a: MarkdownLink }}
-						>
-							{cleanText}
-						</ReactMarkdown>
-					</div>
-				)}
-			</div>
-		</article>
-	);
-}
 
 function ImagePreviewModal(props: {
 	image: ImageContent;
@@ -2223,6 +2126,27 @@ function ChatBubble(props: {
 					{isTool && (
 						<button onClick={() => setExpanded((value) => !value)}>
 							{expanded ? "收起详情" : "查看详情"}
+						</button>
+					)}
+					{isUser && (
+						<button
+							onClick={() => {
+								const text = message.text;
+								// 通过 InputEvent 设置输入框内容，复用 composer 现有的编辑流程
+								document
+									.querySelector<HTMLTextAreaElement>(
+										".composer-box textarea",
+									)
+									?.focus();
+								// 触发自定义事件让 App 层处理编辑
+								window.dispatchEvent(
+									new CustomEvent("user-message-edit", {
+										detail: { text },
+									}),
+								);
+							}}
+						>
+							编辑
 						</button>
 					)}
 				</div>
