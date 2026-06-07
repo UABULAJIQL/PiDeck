@@ -6,6 +6,9 @@ import type {
 	FileTreeNode,
 	Project,
 	SessionSummary,
+	TerminalDataEvent,
+	TerminalExitEvent,
+	TerminalTab,
 } from "../../shared/types";
 
 const now = Date.now();
@@ -90,6 +93,10 @@ const sessions: SessionSummary[] = [
 		messageCount: 3,
 	},
 ];
+
+const terminalTabs: TerminalTab[] = [];
+const terminalDataListeners = new Set<(payload: TerminalDataEvent) => void>();
+const terminalExitListeners = new Set<(payload: TerminalExitEvent) => void>();
 
 export function createPreviewApi(): PiDesktopApi {
 	const noop = (() => () => undefined) as any;
@@ -263,6 +270,52 @@ export function createPreviewApi(): PiDesktopApi {
 			onThinking: noop,
 			onRpcLog: noop,
 			onRuntimeState: noop,
+		},
+		terminal: {
+			list: async (agentId) =>
+				terminalTabs.filter((tab) => tab.agentId === agentId),
+			create: async (agentId) => {
+				const tab: TerminalTab = {
+					id: `preview-terminal-${terminalTabs.length + 1}`,
+					agentId,
+					title: `PowerShell ${terminalTabs.length + 1}`,
+					cwd: "C:/Users/14012/preview-project",
+					shell: "powershell",
+					createdAt: Date.now(),
+				};
+				terminalTabs.push(tab);
+				setTimeout(() => {
+					for (const listener of terminalDataListeners) {
+						listener({
+							tabId: tab.id,
+							data: "Windows PowerShell\r\nPS C:\\\\Users\\\\14012\\\\preview-project> ",
+						});
+					}
+				}, 0);
+				return tab;
+			},
+			input: async (tabId, data) => {
+				for (const listener of terminalDataListeners) {
+					listener({ tabId, data });
+				}
+			},
+			resize: async () => undefined,
+			close: async (tabId) => {
+				const index = terminalTabs.findIndex((tab) => tab.id === tabId);
+				if (index >= 0) terminalTabs.splice(index, 1);
+			},
+			onData: (callback) => {
+				terminalDataListeners.add(callback);
+				return () => {
+					terminalDataListeners.delete(callback);
+				};
+			},
+			onExit: (callback) => {
+				terminalExitListeners.add(callback);
+				return () => {
+					terminalExitListeners.delete(callback);
+				};
+			},
 		},
 	};
 }

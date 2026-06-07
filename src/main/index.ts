@@ -22,6 +22,7 @@ import { SessionScanner } from "./sessions/SessionScanner";
 import { SettingsStore } from "./settings/SettingsStore";
 import { GitService } from "./git/GitService";
 import { ConfigManager } from "./config/ConfigManager";
+import { TerminalSessionManager } from "./terminal/TerminalSessionManager";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -35,6 +36,7 @@ let gitService: GitService;
 let piLocator: PiLocator;
 let agentManager: AgentManager;
 let configManager: ConfigManager;
+let terminalManager: TerminalSessionManager;
 
 function setupTray() {
 	// iconPath 由 electron-vite 的 ?asset 后缀自动解析，打包后也能正确定位
@@ -196,9 +198,10 @@ function registerIpc() {
 	ipcMain.handle(ipcChannels.agentsCreate, (_event, input: CreateAgentInput) =>
 		agentManager.create(input),
 	);
-	ipcMain.handle(ipcChannels.agentsStop, (_event, agentId: string) =>
-		agentManager.stop(agentId),
-	);
+	ipcMain.handle(ipcChannels.agentsStop, async (_event, agentId: string) => {
+		terminalManager.closeAgent(agentId);
+		await agentManager.stop(agentId);
+	});
 	ipcMain.handle(ipcChannels.agentsPrompt, (_event, input: SendPromptInput) =>
 		agentManager.sendPrompt(input),
 	);
@@ -211,9 +214,10 @@ function registerIpc() {
 	ipcMain.handle(ipcChannels.agentsReload, (_event, agentId: string) =>
 		agentManager.reload(agentId),
 	);
-	ipcMain.handle(ipcChannels.agentsRestart, (_event, agentId: string) =>
-		agentManager.restart(agentId),
-	);
+	ipcMain.handle(ipcChannels.agentsRestart, async (_event, agentId: string) => {
+		terminalManager.closeAgent(agentId);
+		return agentManager.restart(agentId);
+	});
 	ipcMain.handle(ipcChannels.agentsCompact, (_event, agentId: string) =>
 		agentManager.compact(agentId),
 	);
@@ -246,6 +250,28 @@ function registerIpc() {
 			// agent 不存在或 RPC 超时时返回空列表，避免控制台报未处理异常
 			return [];
 		}
+	});
+
+	ipcMain.handle(ipcChannels.terminalList, (_event, agentId: string) =>
+		terminalManager.list(agentId),
+	);
+	ipcMain.handle(ipcChannels.terminalCreate, (_event, agentId: string) =>
+		terminalManager.create(agentId),
+	);
+	ipcMain.handle(
+		ipcChannels.terminalInput,
+		(_event, tabId: string, data: string) => {
+			terminalManager.input(tabId, data);
+		},
+	);
+	ipcMain.handle(
+		ipcChannels.terminalResize,
+		(_event, tabId: string, cols: number, rows: number) => {
+			terminalManager.resize(tabId, cols, rows);
+		},
+	);
+	ipcMain.handle(ipcChannels.terminalClose, (_event, tabId: string) => {
+		terminalManager.close(tabId);
 	});
 
 	// ── 配置管理 ──────────────────────────────────────
@@ -336,6 +362,10 @@ app.whenReady().then(async () => {
 		() => mainWindow,
 		settingsStore,
 	);
+	terminalManager = new TerminalSessionManager(
+		(agentId) => agentManager.getCwd(agentId),
+		(channel, payload) => mainWindow?.webContents.send(channel, payload),
+	);
 
 	await settingsStore.load();
 	registerIpc();
@@ -365,6 +395,7 @@ app.on("before-quit", () => {
 	isQuitting = true;
 	tray?.destroy();
 	tray = null;
+	terminalManager?.closeAll();
 	agentManager?.stopAll();
 });
 

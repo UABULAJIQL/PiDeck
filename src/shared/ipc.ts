@@ -58,4 +58,12 @@ export const ipcChannels = {
 
 	/** RPC 日志，用于调试 */
 	agentsRpcLog: "agents:rpc-log",
+
+	terminalList: "terminal:list",
+	terminalCreate: "terminal:create",
+	terminalInput: "terminal:input",
+	terminalResize: "terminal:resize",
+	terminalClose: "terminal:close",
+	terminalData: "terminal:data",
+	terminalExit: "terminal:exit",
 } as const;

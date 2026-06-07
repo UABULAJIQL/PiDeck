@@ -35,6 +35,10 @@ export class AgentManager {
 		return this.messages.get(agentId) ?? [];
 	}
 
+	getCwd(agentId: string) {
+		return this.requireRuntime(agentId).tab.cwd;
+	}
+
 	async loadMessages(agentId: string) {
 		const runtime = this.requireRuntime(agentId);
 		const response = await runtime.process.client.request({

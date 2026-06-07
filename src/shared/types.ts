@@ -19,6 +19,29 @@ export type AgentTab = {
 	createdAt: number;
 };
 
+export type TerminalShell = "pwsh" | "powershell" | "cmd" | "sh";
+
+export type TerminalTab = {
+	id: string;
+	agentId: string;
+	title: string;
+	cwd: string;
+	shell: TerminalShell;
+	createdAt: number;
+	exited?: boolean;
+	exitCode?: number;
+};
+
+export type TerminalDataEvent = {
+	tabId: string;
+	data: string;
+};
+
+export type TerminalExitEvent = {
+	tabId: string;
+	exitCode?: number;
+};
+
 export type ChatRole = "user" | "assistant" | "tool" | "system" | "error";
 
 export type ChatMessage = {

@@ -15,6 +15,9 @@ import type {
 	Project,
 	SendPromptInput,
 	SessionSummary,
+	TerminalDataEvent,
+	TerminalExitEvent,
+	TerminalTab,
 	ThinkingUpdate,
 } from "../shared/types";
 
@@ -243,13 +246,40 @@ const api = {
 			}) => void,
 		) => subscribe(ipcChannels.agentsRuntimeState, callback),
 	},
+	terminal: {
+		list: (agentId: string) =>
+			ipcRenderer.invoke(ipcChannels.terminalList, agentId) as Promise<
+				TerminalTab[]
+			>,
+		create: (agentId: string) =>
+			ipcRenderer.invoke(ipcChannels.terminalCreate, agentId) as Promise<
+				TerminalTab
+			>,
+		input: (tabId: string, data: string) =>
+			ipcRenderer.invoke(ipcChannels.terminalInput, tabId, data) as Promise<void>,
+		resize: (tabId: string, cols: number, rows: number) =>
+			ipcRenderer.invoke(
+				ipcChannels.terminalResize,
+				tabId,
+				cols,
+				rows,
+			) as Promise<void>,
+		close: (tabId: string) =>
+			ipcRenderer.invoke(ipcChannels.terminalClose, tabId) as Promise<void>,
+		onData: (callback: (payload: TerminalDataEvent) => void) =>
+			subscribe(ipcChannels.terminalData, callback),
+		onExit: (callback: (payload: TerminalExitEvent) => void) =>
+			subscribe(ipcChannels.terminalExit, callback),
+	},
 };
 
 function subscribe<T>(channel: string, callback: (payload: T) => void) {
 	const listener = (_event: Electron.IpcRendererEvent, payload: T) =>
 		callback(payload);
 	ipcRenderer.on(channel, listener);
-	return () => ipcRenderer.removeListener(channel, listener);
+	return () => {
+		ipcRenderer.removeListener(channel, listener);
+	};
 }
 
 contextBridge.exposeInMainWorld("piDesktop", api);
