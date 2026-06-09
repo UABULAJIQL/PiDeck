@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.4.13-green)
+![Version](https://img.shields.io/badge/version-0.4.15-green)
 
 `pi-desktop` is **not** a fork of pi. It is a lightweight Electron shell that orchestrates multiple `pi --mode rpc` processes, providing a native desktop UI for projects, sessions, conversations, configuration, and tool orchestration — all powered by pi's native agent capabilities.
 
@@ -16,11 +16,13 @@
 
 ## 📋 Changelog
 
-> **Latest: v0.4.13** (2026-06-09)
+> **Latest: v0.4.15** (2026-06-09)
 
-### v0.4.13 Updates
-- 🪟 Windows path fix: install checks and RPC agent startup now handle npm shim paths that contain spaces.
-- 📐 Long-answer layout fix: long assistant answers, historical sessions, thinking blocks, code blocks, and tables now stay within the conversation area.
+### v0.4.15 Updates
+- 💬 Built-in Chat workspace: a fixed Chat entry now sits at the top of the project list, so you can start general conversations without adding a project first.
+- 🧭 Project ordering: regular projects can now be drag-sorted and the order is persisted.
+- 🖥️ Terminal restore: switching away from an agent and back now restores terminal scrollback and scrollbar state.
+- 🎨 Brand icon refresh: the app icon, boot logo, and built-in Chat entry now use the new `#14b814` brand green.
 
 [View Full Changelog →](CHANGELOG.md)
 
@@ -30,7 +32,8 @@
 
 | Feature | Description |
 |---|---|
-| **Multi-Project Workspace** | Add, search, and switch between local project folders. Run multiple pi agents simultaneously with per-project isolation. |
+| **Multi-Project Workspace** | Add, search, drag-sort, and switch between local project folders. Run multiple pi agents simultaneously with per-project isolation. |
+| **Built-in Chat Workspace** | A fixed Chat entry at the top of the project list writes to the app user-data directory for general conversations that do not need a code project. |
 | **Configuration Management** | Visual editors for pi's `models.json`, `auth.json`, and `settings.json` — manage providers, API keys, model discovery, connection tests, and request headers without touching JSON files manually. |
 | **Proxy Settings** | Manage pi agent process proxy and desktop proxy separately; model discovery and connection tests can use the desktop proxy. |
 | **Slash Commands & `!` Shell** | Built-in slash command suggestions (`/reload`, `/compact`, `/session`, …) and `!command` / `!!command` for inline shell execution directly in the chat composer. |

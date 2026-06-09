@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.4.13-green)
+![Version](https://img.shields.io/badge/version-0.4.15-green)
 
 `pi-desktop` **不是** pi 的分支。它是一个轻量 Electron 外壳，通过启动多个 `pi --mode rpc` 进程，将项目管理、会话管理、对话界面、配置管理和工具编排整合到一个原生桌面应用中——所有 Agent 能力由 pi 原生提供。
 
@@ -16,11 +16,13 @@
 
 ## 📋 更新日志
 
-> **最新版本 v0.4.13**（2026-06-09）
+> **最新版本 v0.4.15**（2026-06-09）
 
-### v0.4.13 更新
-- 🪟 Windows 路径修复：环境检测和 RPC Agent 启动现在都能处理包含空格的 npm shim 路径。
-- 📐 长回答宽度修复：长文本回答、历史会话、思考块、代码块和表格不再撑出会话区域。
+### v0.4.15 更新
+- 💬 内置 Chat 对话区：项目列表顶部新增固定 Chat 入口，无需先添加项目即可直接开始通用对话。
+- 🧭 项目列表排序：普通项目支持拖动排序，顺序会持久保存。
+- 🖥️ 终端恢复：切换 Agent 后再回来，终端 scrollback 和滚动条会正确恢复。
+- 🎨 品牌图标：应用图标、启动页和内置 Chat 入口统一使用新的 `#14b814` 品牌绿。
 
 [查看完整更新日志 →](CHANGELOG.zh-CN.md)
 
@@ -30,7 +32,8 @@
 
 | 功能 | 说明 |
 |---|---|
-| **多项目工作区** | 添加、搜索和切换本地项目目录，同时运行多个 pi Agent，项目间完全隔离。 |
+| **多项目工作区** | 添加、搜索、拖动排序和切换本地项目目录，同时运行多个 pi Agent，项目间完全隔离。 |
+| **内置 Chat 对话区** | 项目列表顶部固定 Chat 入口，写入应用用户目录，适合无需绑定代码项目的通用对话。 |
 | **配置管理** | 可视化编辑器管理 pi 的 `models.json`、`auth.json`、`settings.json`，支持 Provider 重命名、模型拉取、连接测试和请求头/User-Agent 配置。 |
 | **代理设置** | 独立管理 pi agent 子进程代理和桌面端代理，模型拉取与连接测试可走桌面端代理。 |
 | **斜线命令 & `!` Shell** | 内置斜线命令建议（`/compact`、`/session` 等），支持 `!command` / `!!command` 在聊天输入框直接执行 Shell 命令。 |

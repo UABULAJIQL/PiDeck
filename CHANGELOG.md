@@ -4,6 +4,21 @@
 
 All notable changes to pi-desktop are documented here.
 
+## v0.4.15 - 2026-06-09
+
+### Added
+- Built-in Chat workspace: a fixed Chat entry now appears at the top of the project list for general conversations that do not need a code project.
+- Project drag sorting: regular project rows can now be reordered by drag and drop, with the custom order persisted across restarts.
+
+### Fixed
+- Terminal scrollback restore: switching away from an agent and back now restores terminal output and scrollbar state.
+- Agent startup focus: a newly created agent no longer steals focus if you switch to another agent while it is still starting.
+- Composer drafts: each agent now keeps its own unsent text and image attachments instead of sharing one global composer draft.
+- Provider connection tests now use smaller probe requests and clearer timeout guidance, reducing false failures with slow reasoning models or queued upstream providers.
+
+### Improved
+- Refreshed the app icon, boot logo, and built-in Chat entry with the new `#14b814` brand green while keeping regular project avatars more neutral.
+
 ## v0.4.14 - 2026-06-09
 
 ### Improved
