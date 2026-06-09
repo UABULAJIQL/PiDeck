@@ -62,6 +62,11 @@ const TERMINAL_THEMES = {
 
 type TerminalThemeId = keyof typeof TERMINAL_THEMES;
 
+function stripReplayBuffer(tab: TerminalTab): TerminalTab {
+	const { buffer: _buffer, ...rest } = tab;
+	return rest;
+}
+
 export function TerminalDock(props: {
 	agentId: string;
 	height: number;
@@ -96,7 +101,14 @@ export function TerminalDock(props: {
 			try {
 				const nextTabs = await props.terminal.ensure(props.agentId);
 				if (cancelled) return;
-				setTabs(nextTabs);
+				buffersRef.current = nextTabs.reduce<Record<string, string>>(
+					(current, tab) => ({
+						...current,
+						[tab.id]: tab.buffer ?? current[tab.id] ?? "",
+					}),
+					{ ...buffersRef.current },
+				);
+				setTabs(nextTabs.map(stripReplayBuffer));
 				setActiveTabId(nextTabs[0]?.id ?? "");
 			} finally {
 				if (!cancelled) setLoading(false);
@@ -145,13 +157,13 @@ export function TerminalDock(props: {
 			cursorBlink: true,
 			fontFamily: '"Cascadia Mono", Consolas, monospace',
 			fontSize: 12.5,
+			scrollback: 5000,
 			theme: theme.xterm,
 		});
 		const fit = new FitAddon();
 		terminal.loadAddon(fit);
 		terminal.open(containerRef.current);
-		fit.fit();
-		terminal.write(buffersRef.current[activeTab.id] ?? "");
+		let resizeFrame: number | null = null;
 		const dataDisposable = terminal.onData((data) => {
 			if (!activeTab.exited) void props.terminal.input(activeTab.id, data);
 		});
@@ -161,14 +173,30 @@ export function TerminalDock(props: {
 				void props.terminal.resize(activeTab.id, terminal.cols, terminal.rows);
 			}
 		};
-		const observer = new ResizeObserver(resize);
+		const scheduleResize = () => {
+			if (resizeFrame != null) window.cancelAnimationFrame(resizeFrame);
+			resizeFrame = window.requestAnimationFrame(() => {
+				resizeFrame = null;
+				resize();
+			});
+		};
+		const observer = new ResizeObserver(scheduleResize);
 		observer.observe(containerRef.current);
 		resize();
+		terminal.write(buffersRef.current[activeTab.id] ?? "", () => {
+			terminal.scrollToBottom();
+			scheduleResize();
+		});
 
 		xtermRef.current = terminal;
 		fitRef.current = fit;
-		requestAnimationFrame(() => terminal.focus());
+		const focusFrame = window.requestAnimationFrame(() => {
+			scheduleResize();
+			terminal.focus();
+		});
 		return () => {
+			if (resizeFrame != null) window.cancelAnimationFrame(resizeFrame);
+			window.cancelAnimationFrame(focusFrame);
 			observer.disconnect();
 			dataDisposable.dispose();
 			terminal.dispose();
@@ -200,7 +228,7 @@ export function TerminalDock(props: {
 
 	async function addTab() {
 		const next = await props.terminal.create(props.agentId);
-		setTabs((current) => [...current, next]);
+		setTabs((current) => [...current, stripReplayBuffer(next)]);
 		setActiveTabId(next.id);
 		setCollapsed(false);
 	}

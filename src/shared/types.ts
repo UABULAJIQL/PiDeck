@@ -31,6 +31,7 @@ export type TerminalTab = {
 	createdAt: number;
 	exited?: boolean;
 	exitCode?: number;
+	buffer?: string;
 };
 
 export type TerminalDataEvent = {

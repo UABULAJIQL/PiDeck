@@ -6,9 +6,11 @@ import type { TerminalShell, TerminalTab } from "../../shared/types";
 type TerminalRuntime = {
 	tab: TerminalTab;
 	pty: pty.IPty;
+	buffer: string;
 };
 
 type Emit = (channel: string, payload: unknown) => void;
+const MAX_TERMINAL_REPLAY_BUFFER = 200_000;
 
 export class TerminalSessionManager {
 	private readonly runtimes = new Map<string, Map<string, TerminalRuntime>>();
@@ -20,7 +22,7 @@ export class TerminalSessionManager {
 
 	list(agentId: string) {
 		return [...(this.runtimes.get(agentId)?.values() ?? [])].map(
-			(runtime) => runtime.tab,
+			(runtime) => this.snapshot(runtime),
 		);
 	}
 
@@ -46,15 +48,18 @@ export class TerminalSessionManager {
 			shell: spawned.shell,
 			createdAt: Date.now(),
 		};
-		const runtime: TerminalRuntime = { tab, pty: spawned.pty };
+		const runtime: TerminalRuntime = { tab, pty: spawned.pty, buffer: "" };
 		runtimes.set(id, runtime);
 
 		spawned.pty.onData((data) => {
+			this.appendBuffer(runtime, data);
 			this.emit(ipcChannels.terminalData, { tabId: id, data });
 		});
 		spawned.pty.onExit((event) => {
 			tab.exited = true;
 			tab.exitCode = event.exitCode;
+			const exitText = `\r\n[process exited${event.exitCode != null ? ` with code ${event.exitCode}` : ""}]\r\n`;
+			this.appendBuffer(runtime, exitText);
 			this.emit(ipcChannels.terminalExit, {
 				tabId: id,
 				exitCode: event.exitCode,
@@ -119,6 +124,22 @@ export class TerminalSessionManager {
 			if (runtime) return { tabs, runtime };
 		}
 		return undefined;
+	}
+
+	private snapshot(runtime: TerminalRuntime): TerminalTab {
+		return {
+			...runtime.tab,
+			buffer: runtime.buffer,
+		};
+	}
+
+	private appendBuffer(runtime: TerminalRuntime, data: string) {
+		// Renderer 会在切换项目/agent 时卸载 TerminalDock；主进程保留有限回放，
+		// 切回来才能重建 xterm scrollback，同时用字符上限避免长期终端占用过多内存。
+		runtime.buffer = `${runtime.buffer}${data}`;
+		if (runtime.buffer.length > MAX_TERMINAL_REPLAY_BUFFER) {
+			runtime.buffer = runtime.buffer.slice(-MAX_TERMINAL_REPLAY_BUFFER);
+		}
 	}
 
 	private spawnShell(cwd: string): { shell: TerminalShell; pty: pty.IPty } {
