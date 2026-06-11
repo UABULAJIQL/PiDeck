@@ -18,6 +18,9 @@ import type {
 	PiCommand,
 	PiInstallStatus,
 	PiProxyTestResult,
+	PiSkillListResult,
+	PiSkillSummary,
+	CreatePiSkillInput,
 	Project,
 	SendPromptInput,
 	SessionSummary,
@@ -108,6 +111,12 @@ const api = {
 	pi: {
 		check: () =>
 			ipcRenderer.invoke(ipcChannels.piCheck) as Promise<PiInstallStatus>,
+		/** 验证用户手动输入的 pi 路径，通过后主进程会自动保存到 settings.customPiPath */
+		checkCustom: (customPath: string) =>
+			ipcRenderer.invoke(
+				ipcChannels.piCheckCustom,
+				customPath,
+			) as Promise<PiInstallStatus>,
 	},
 	app: {
 		info: () => ipcRenderer.invoke(ipcChannels.appInfo) as Promise<AppInfo>,
@@ -121,6 +130,22 @@ const api = {
 			ipcRenderer.invoke(ipcChannels.appOpenExternal, url) as Promise<void>,
 		toggleDevTools: () =>
 			ipcRenderer.invoke(ipcChannels.appToggleDevTools) as Promise<boolean>,
+	},
+	skills: {
+		list: () =>
+			ipcRenderer.invoke(ipcChannels.skillsList) as Promise<PiSkillListResult>,
+		create: (input: CreatePiSkillInput) =>
+			ipcRenderer.invoke(ipcChannels.skillsCreate, input) as Promise<PiSkillSummary>,
+		toggle: (path: string, enabled: boolean) =>
+			ipcRenderer.invoke(
+				ipcChannels.skillsToggle,
+				path,
+				enabled,
+			) as Promise<PiSkillSummary>,
+		delete: (path: string) =>
+			ipcRenderer.invoke(ipcChannels.skillsDelete, path) as Promise<void>,
+		openFolder: (path?: string) =>
+			ipcRenderer.invoke(ipcChannels.skillsOpenFolder, path) as Promise<void>,
 	},
 	settings: {
 		get: () =>

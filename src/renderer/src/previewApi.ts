@@ -174,6 +174,12 @@ export function createPreviewApi(): PiDesktopApi {
 				version: "preview",
 				searchedDirs: [],
 			}),
+			checkCustom: async (_path) => ({
+				installed: true,
+				command: _path,
+				version: "preview",
+				searchedDirs: [],
+			}),
 		},
 		app: {
 			info: async () => ({
@@ -206,6 +212,47 @@ export function createPreviewApi(): PiDesktopApi {
 			openExternal: async () => undefined,
 			toggleDevTools: async () => false,
 		},
+		skills: {
+			list: async () => ({
+				locations: [
+					{
+						id: "pi-global" as const,
+						label: "~/.pi/agent/skills",
+						path: "C:/Users/preview/.pi/agent/skills",
+						rootMarkdownEnabled: true,
+					},
+				],
+				skills: [],
+			}),
+			create: async (input) => ({
+				id: `pi-global:${input.name}`,
+				name: input.name,
+				description: input.description,
+				path: `C:/Users/preview/.pi/agent/skills/${input.name}/SKILL.md`,
+				dir: `C:/Users/preview/.pi/agent/skills/${input.name}`,
+				sourceId: input.locationId,
+				sourceLabel: "~/.pi/agent/skills",
+				type: "directory" as const,
+				enabled: true,
+				valid: true,
+				warnings: [],
+			}),
+			toggle: async (path, enabled) => ({
+				id: `pi-global:${path}`,
+				name: "preview-skill",
+				description: "Preview skill",
+				path,
+				dir: path.replace(/[/\\]SKILL\.md$/, ""),
+				sourceId: "pi-global" as const,
+				sourceLabel: "~/.pi/agent/skills",
+				type: "directory" as const,
+				enabled,
+				valid: true,
+				warnings: [],
+			}),
+			delete: async () => undefined,
+			openFolder: async () => undefined,
+		},
 		settings: {
 			get: async (): Promise<AppSettings> => ({
 				useNativeTitleBar: true,
@@ -222,6 +269,7 @@ export function createPreviewApi(): PiDesktopApi {
 				desktopProxyEnabled: false,
 				desktopProxyUrl: "http://127.0.0.1:7890",
 				desktopProxyBypass: "localhost,127.0.0.1,::1",
+				customPiPath: "",
 				telemetryEnabled: true,
 			}),
 			update: async (patch): Promise<AppSettings> => ({
@@ -239,6 +287,7 @@ export function createPreviewApi(): PiDesktopApi {
 				desktopProxyEnabled: false,
 				desktopProxyUrl: "http://127.0.0.1:7890",
 				desktopProxyBypass: "localhost,127.0.0.1,::1",
+				customPiPath: "",
 				...patch,
 				telemetryEnabled: patch.telemetryEnabled ?? true,
 			}),

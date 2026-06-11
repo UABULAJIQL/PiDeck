@@ -6,7 +6,7 @@ import type { AppSettings } from "../../shared/types";
 
 type PiProcessSettings = Pick<
   AppSettings,
-  "piProxyEnabled" | "piProxyUrl" | "piProxyBypass"
+  "piProxyEnabled" | "piProxyUrl" | "piProxyBypass" | "customPiPath"
 >;
 
 export class PiProcess extends EventEmitter {
@@ -25,7 +25,8 @@ export class PiProcess extends EventEmitter {
 
     const args = ["--mode", "rpc", ...(sessionPath ? ["--session", sessionPath] : [])];
     const locator = new PiLocator();
-    const command = locator.resolveCommand();
+    // 用户手动指定的 pi 路径优先于自动检测，解决 npm global、nvm 等路径未在 PATH 中的问题
+    const command = locator.resolveCommand(this.settings?.customPiPath);
     const invocation = locator.createInvocation(command, args);
 
     // 每个 agent 绑定独立 cwd，确保 pi 自己发现项目级 AGENTS.md、settings 和 session 分组。
@@ -36,6 +37,7 @@ export class PiProcess extends EventEmitter {
       stdio: ["pipe", "pipe", "pipe"],
       shell: invocation.shell,
       env: locator.createProcessEnv(this.settings),
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     });
 
     this.rpc = new PiRpcClient(this.proc.stdin, this.proc.stdout);

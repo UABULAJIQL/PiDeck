@@ -20,6 +20,7 @@ import type {
 	AppUpdateInfo,
 	CreateAgentInput,
 	SendPromptInput,
+	CreatePiSkillInput,
 } from "../shared/types";
 import { ProjectStore } from "./projects/ProjectStore";
 import { FileSystemService } from "./fs/FileSystemService";
@@ -34,6 +35,7 @@ import { GitService } from "./git/GitService";
 import { ConfigManager } from "./config/ConfigManager";
 import { TerminalSessionManager } from "./terminal/TerminalSessionManager";
 import { TelemetryService } from "./telemetry/TelemetryService";
+import { SkillManager } from "./skills/SkillManager";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -48,6 +50,7 @@ let gitService: GitService;
 let piLocator: PiLocator;
 let agentManager: AgentManager;
 let configManager: ConfigManager;
+let skillManager: SkillManager;
 let terminalManager: TerminalSessionManager;
 
 const RELEASES_URL = "https://github.com/ayuayue/pi-desktop/releases";
@@ -346,7 +349,23 @@ function registerIpc() {
 		},
 	);
 
-	ipcMain.handle(ipcChannels.piCheck, () => piLocator.check());
+	ipcMain.handle(ipcChannels.piCheck, () => {
+		// 用户手动指定的路径优先于自动检测
+		const settings = settingsStore.get();
+		return piLocator.check(settings.customPiPath);
+	});
+	ipcMain.handle(
+		ipcChannels.piCheckCustom,
+		async (_event, customPath: string) => {
+			const status = await piLocator.validateCustomPath(customPath);
+			// 校验通过后持久化归一化后的路径，后续启动 agent 时 PiProcess 会从 settings 读取。
+			// 例如用户粘贴 "D:\\foo\\pi" 时，PiLocator 会返回可执行的 D:\foo\pi.cmd。
+			if (status.installed && status.command) {
+				await settingsStore.update({ customPiPath: status.command });
+			}
+			return status;
+		},
+	);
 	ipcMain.handle(ipcChannels.appInfo, () => ({
 		version: app.getVersion(),
 		releasesUrl: RELEASES_URL,
@@ -391,6 +410,20 @@ function registerIpc() {
 	ipcMain.handle(
 		ipcChannels.settingsTestPiProxy,
 		() => testPiProxy(settingsStore.get()),
+	);
+
+	ipcMain.handle(ipcChannels.skillsList, () => skillManager.list());
+	ipcMain.handle(ipcChannels.skillsCreate, (_event, input: CreatePiSkillInput) =>
+		skillManager.create(input),
+	);
+	ipcMain.handle(ipcChannels.skillsToggle, (_event, path: string, enabled: boolean) =>
+		skillManager.toggle(path, enabled),
+	);
+	ipcMain.handle(ipcChannels.skillsDelete, (_event, path: string) =>
+		skillManager.delete(path),
+	);
+	ipcMain.handle(ipcChannels.skillsOpenFolder, (_event, path?: string) =>
+		skillManager.openFolder(path),
 	);
 
 	ipcMain.handle(ipcChannels.agentsList, () => agentManager.list());
@@ -604,6 +637,7 @@ app.whenReady().then(async () => {
 	gitService = new GitService();
 	piLocator = new PiLocator();
 	configManager = new ConfigManager();
+	skillManager = new SkillManager();
 	agentManager = new AgentManager(
 		(id) => projectStore.get(id),
 		() => mainWindow,

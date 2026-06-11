@@ -302,6 +302,7 @@ export function App() {
 		desktopProxyEnabled: false,
 		desktopProxyUrl: "http://127.0.0.1:7890",
 		desktopProxyBypass: "localhost,127.0.0.1,::1",
+		customPiPath: "",
 		telemetryEnabled: true,
 	});
 	const [settingsNotice, setSettingsNotice] = useState("");
@@ -316,6 +317,10 @@ export function App() {
 		releasesUrl: "https://github.com/ayuayue/pi-desktop/releases",
 	});
 	const [piChecking, setPiChecking] = useState(false);
+	// 手动输入 pi 路径相关状态
+	const [customPiPath, setCustomPiPath] = useState("");
+	const [customPathValidating, setCustomPathValidating] = useState(false);
+	const [customPathResult, setCustomPathResult] = useState<PiInstallStatus | null>(null);
 	const [environmentDialog, setEnvironmentDialog] = useState(false);
 	const [listWidth, setListWidth] = useState(260);
 	const [drawerWidth, setDrawerWidth] = useState(360);
@@ -527,6 +532,7 @@ export function App() {
 			.catch(() => undefined);
 		void api.settings.get().then((next) => {
 			setSettings(next);
+			setCustomPiPath(next.customPiPath ?? "");
 			if (!next.piEnvironmentChecked) {
 				// 首次检测延后一帧启动，先让主界面完成绘制，避免 packaged app 打开时出现几秒白屏。
 				window.setTimeout(() => void checkPiInstall("startup"), 300);
@@ -978,6 +984,66 @@ export function App() {
 		} finally {
 			setPiChecking(false);
 		}
+	}
+
+	async function checkPiInstallInline() {
+		setPiChecking(true);
+		setCustomPathResult(null);
+		try {
+			const next = await api.pi.check();
+			setPiStatus(next);
+			if (next.installed) {
+				const saved = await api.settings.update({ piEnvironmentChecked: true });
+				setSettings(saved);
+				setSettingsNotice(`pi 检测通过：${next.command ?? next.version ?? "pi"}`);
+			} else {
+				setSettingsNotice(`pi 检测失败：${next.error ?? "未检测到 pi CLI"}`);
+			}
+		} finally {
+			setPiChecking(false);
+		}
+	}
+
+	/**
+	 * 校验用户手动输入的 pi 路径。
+	 * 主进程执行 command --version 验证后，通过则自动保存到 settings.customPiPath，
+	 * 之后新建/重启 agent 时 PiProcess 会优先使用自定义路径。
+	 */
+	async function validateCustomPiPath(options: { closeDialogOnSuccess?: boolean } = {}) {
+		const path = customPiPath.trim();
+		if (!path) return;
+		setCustomPathValidating(true);
+		setCustomPathResult(null);
+		try {
+			const result = await api.pi.checkCustom(path);
+			setCustomPathResult(result);
+			if (result.installed) {
+				// 主进程会保存 PiLocator 归一化后的路径；这里重新读取，确保 UI 展示的是实际使用路径。
+				const updated = await api.settings.get();
+				setSettings(updated);
+				setCustomPiPath(updated.customPiPath ?? result.command ?? path);
+				setPiStatus(result);
+				setSettingsNotice(`pi 路径已保存：${result.command ?? updated.customPiPath}`);
+				if (options.closeDialogOnSuccess) {
+					// 启动检测弹窗场景下保持原有成功后自动关闭体验；设置页内校验不关闭设置窗口。
+					window.setTimeout(() => setEnvironmentDialog(false), 3000);
+				}
+			} else {
+				setSettingsNotice(`pi 路径校验失败：${result.error ?? "无法执行该路径"}`);
+			}
+		} finally {
+			setCustomPathValidating(false);
+		}
+	}
+
+	async function clearCustomPiPath() {
+		const updated = await api.settings.update({ customPiPath: "" });
+		setSettings(updated);
+		setCustomPiPath("");
+		setCustomPathResult(null);
+		setSettingsNotice("已清除自定义 pi 路径，将恢复自动检测。");
+		const status = await api.pi.check();
+		setPiStatus(status);
 	}
 
 	function showToast(message: string, duration = 3500) {
@@ -1989,7 +2055,7 @@ export function App() {
 						</button>
 						<button
 							className="icon-button config-icon"
-							title="配置管理"
+							title="Pi管理"
 							onClick={() => setConfigOpen(true)}
 						>
 							<Sliders size={17} />
@@ -2687,13 +2753,27 @@ export function App() {
 				<EnvironmentDialog
 					status={piStatus}
 					checking={piChecking}
-					onClose={() => setEnvironmentDialog(false)}
-					onRecheck={() => checkPiInstall("manual")}
+					onClose={() => {
+						setEnvironmentDialog(false);
+						setCustomPathResult(null);
+					}}
+					onRecheck={() => {
+						setCustomPathResult(null);
+						checkPiInstall("manual");
+					}}
 					onOpenInstallDocs={() =>
 						api.app.openExternal(
 							"https://pi.dev/docs/latest/quickstart#install",
 						)
 					}
+					customPath={customPiPath}
+					customPathValidating={customPathValidating}
+					customPathResult={customPathResult}
+					onCustomPathChange={(path) => {
+						setCustomPiPath(path);
+						setCustomPathResult(null);
+					}}
+					onValidateCustomPath={() => validateCustomPiPath({ closeDialogOnSuccess: true })}
 				/>
 			)}
 			{modelPickerOpen && (
@@ -2725,7 +2805,16 @@ export function App() {
 					piProxyNotice={piProxyNotice}
 					piProxyNoticeTone={piProxyNoticeTone}
 					appInfo={appInfo}
-					onCheckPi={() => checkPiInstall("manual")}
+					customPiPath={customPiPath}
+					customPathValidating={customPathValidating}
+					customPathResult={customPathResult}
+					onCustomPathChange={(path) => {
+						setCustomPiPath(path);
+						setCustomPathResult(null);
+					}}
+					onValidateCustomPath={() => validateCustomPiPath()}
+					onClearCustomPath={clearCustomPiPath}
+					onCheckPi={checkPiInstallInline}
 					onTestPiProxy={() => testPiProxy()}
 					onCheckUpdate={() => checkAppUpdate("manual")}
 					onToggleDevTools={async () => {

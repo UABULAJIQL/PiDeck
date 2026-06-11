@@ -4,6 +4,7 @@ import { AuthTab } from "./config/AuthTab";
 import { ModelsTab } from "./config/ModelsTab";
 import { RawTab } from "./config/RawTab";
 import { SettingsTab } from "./config/SettingsTab";
+import { SkillsTab } from "./config/SkillsTab";
 import type {
 	AuthFile,
 	ConfigTab,
@@ -11,6 +12,7 @@ import type {
 	ModelsFile,
 	SettingsFile,
 } from "./config/configTypes";
+import type { PiSkillListResult, PiSkillLocation, PiSkillSummary } from "../../shared/types";
 import { getProviderHeaders } from "./config/providerHeaders";
 
 const api: PiDesktopApi = (window as unknown as { piDesktop: PiDesktopApi })
@@ -31,6 +33,7 @@ export function ConfigModal(props: {
 	onSaved: () => void;
 }) {
 	const { open, onClose, onSaved } = props;
+	const [section, setSection] = useState<"config" | "skills">("config");
 	const [tab, setTab] = useState<ConfigTab>("models");
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -41,6 +44,15 @@ export function ConfigModal(props: {
 	const [modelsData, setModelsData] = useState<ModelsFile>({ providers: {} });
 	const [authData, setAuthData] = useState<AuthFile>({});
 	const [settingsData, setSettingsData] = useState<SettingsFile>({});
+	const [skillsData, setSkillsData] = useState<PiSkillListResult>({
+		locations: [],
+		skills: [],
+	});
+	const [creatingSkill, setCreatingSkill] = useState(false);
+	const [newSkillName, setNewSkillName] = useState("");
+	const [newSkillDescription, setNewSkillDescription] = useState("");
+	const [newSkillLocationId, setNewSkillLocationId] = useState<PiSkillLocation["id"]>("pi-global");
+	const [deleteSkillConfirm, setDeleteSkillConfirm] = useState<PiSkillSummary | null>(null);
 	const [rawContent, setRawContent] = useState("");
 	const [rawFileName, setRawFileName] = useState("models.json");
 
@@ -125,8 +137,13 @@ export function ConfigModal(props: {
 	);
 
 	useEffect(() => {
-		if (open) loadConfig(tab);
-	}, [open, tab, loadConfig]);
+		if (!open) return;
+		if (section === "skills") {
+			void refreshSkills();
+			return;
+		}
+		void loadConfig(tab);
+	}, [open, section, tab, loadConfig]);
 
 	const showToast = (msg: string) => {
 		setToast(msg);
@@ -420,6 +437,59 @@ export function ConfigModal(props: {
 	};
 
 	/** 从用户选择的 JSON 文件导入配置，成功后刷新当前 tab。 */
+	const refreshSkills = async () => {
+		const res = await api.skills.list();
+		setSkillsData(res);
+		if (res.locations[0] && !res.locations.some((item) => item.id === newSkillLocationId)) {
+			setNewSkillLocationId(res.locations[0].id);
+		}
+	};
+
+	const handleCreateSkill = async () => {
+		setCreatingSkill(true);
+		setError(null);
+		try {
+			await api.skills.create({
+				name: newSkillName,
+				description: newSkillDescription,
+				locationId: newSkillLocationId,
+			});
+			setNewSkillName("");
+			setNewSkillDescription("");
+			await refreshSkills();
+			showToast("Skill 已创建，重启 agent 后生效");
+		} catch (e) {
+			setError(e instanceof Error ? e.message : String(e));
+		} finally {
+			setCreatingSkill(false);
+		}
+	};
+
+	const handleToggleSkill = async (path: string, enabled: boolean) => {
+		setError(null);
+		try {
+			await api.skills.toggle(path, enabled);
+			await refreshSkills();
+			showToast(enabled ? "Skill 已启用，重启 agent 后生效" : "Skill 已禁用，重启 agent 后生效");
+		} catch (e) {
+			setError(e instanceof Error ? e.message : String(e));
+		}
+	};
+
+	const confirmDeleteSkill = async () => {
+		if (!deleteSkillConfirm) return;
+		const target = deleteSkillConfirm;
+		setDeleteSkillConfirm(null);
+		setError(null);
+		try {
+			await api.skills.delete(target.path);
+			await refreshSkills();
+			showToast("Skill 已删除，重启 agent 后生效");
+		} catch (e) {
+			setError(e instanceof Error ? e.message : String(e));
+		}
+	};
+
 	const handleImport = async () => {
 		const input = document.createElement("input");
 		input.type = "file";
@@ -450,19 +520,39 @@ export function ConfigModal(props: {
 		<div className="modal-backdrop">
 			<div className="config-modal">
 				<div className="modal-header">
-					<strong>配置管理</strong>
+					<strong>Pi 管理</strong>
 					<div className="modal-header-actions">
-						<button className="config-btn primary" onClick={handleExport}>
-							导出
-						</button>
-						<button className="config-btn blue" onClick={handleImport}>
-							导入
-						</button>
+						{section === "config" && (
+							<>
+								<button className="config-btn primary" onClick={handleExport}>
+									导出
+								</button>
+								<button className="config-btn blue" onClick={handleImport}>
+									导入
+								</button>
+							</>
+						)}
 						<button className="modal-close-btn" onClick={onClose}>×</button>
 					</div>
 				</div>
 
-				<div className="config-tabs">
+				<div className="config-primary-tabs">
+					<button
+						className={section === "config" ? "active" : ""}
+						onClick={() => setSection("config")}
+					>
+						配置管理
+					</button>
+					<button
+						className={section === "skills" ? "active" : ""}
+						onClick={() => setSection("skills")}
+					>
+						Skills
+					</button>
+				</div>
+
+				{section === "config" && (
+					<div className="config-tabs">
 					<button
 						className={tab === "models" ? "active" : ""}
 						onClick={() => setTab("models")}
@@ -487,13 +577,14 @@ export function ConfigModal(props: {
 					>
 						源文件
 					</button>
-				</div>
+					</div>
+				)}
 
 				<div className="config-content">
 					{loading && <div className="config-loading">加载中…</div>}
 					{error && <div className="config-error">{error}</div>}
 
-					{!loading && tab === "models" && (
+					{section === "config" && !loading && tab === "models" && (
 						<ModelsTab
 							data={modelsData}
 							expandedProvider={expandedProvider}
@@ -549,7 +640,7 @@ export function ConfigModal(props: {
 						/>
 					)}
 
-					{!loading && tab === "auth" && (
+					{section === "config" && !loading && tab === "auth" && (
 						<AuthTab
 							data={authData}
 							expandedAuth={expandedAuth}
@@ -572,7 +663,7 @@ export function ConfigModal(props: {
 						/>
 					)}
 
-					{!loading && tab === "settings" && (
+					{section === "config" && !loading && tab === "settings" && (
 						<SettingsTab
 							data={settingsData}
 							saving={saving}
@@ -581,7 +672,27 @@ export function ConfigModal(props: {
 						/>
 					)}
 
-					{!loading && tab === "raw" && (
+					{section === "skills" && !loading && (
+						<SkillsTab
+							data={skillsData}
+							loading={loading}
+							creating={creatingSkill}
+							newName={newSkillName}
+							newDescription={newSkillDescription}
+							newLocationId={newSkillLocationId}
+							onRefresh={refreshSkills}
+							onOpenRoot={() => api.skills.openFolder()}
+							onChangeNewName={setNewSkillName}
+							onChangeNewDescription={setNewSkillDescription}
+							onChangeNewLocation={setNewSkillLocationId}
+							onCreate={handleCreateSkill}
+							onToggle={(skill, enabled) => handleToggleSkill(skill.path, enabled)}
+							onDelete={setDeleteSkillConfirm}
+							onOpenFolder={(skill) => api.skills.openFolder(skill.path)}
+						/>
+					)}
+
+					{section === "config" && !loading && tab === "raw" && (
 						<RawTab
 							fileName={rawFileName}
 							content={rawContent}
@@ -592,6 +703,24 @@ export function ConfigModal(props: {
 						/>
 					)}
 				</div>
+
+				{deleteSkillConfirm && (
+					<div className="session-delete-confirm-backdrop" onClick={() => setDeleteSkillConfirm(null)}>
+						<div className="session-delete-confirm skill-delete-confirm" onClick={(event) => event.stopPropagation()}>
+							<strong>删除 Skill</strong>
+							<p>
+								确认删除「{deleteSkillConfirm.name}」吗？此操作会删除本地 Skill 文件，且不可撤销。
+							</p>
+							<small>{deleteSkillConfirm.path}</small>
+							<div className="session-delete-confirm-actions">
+								<button onClick={() => setDeleteSkillConfirm(null)}>取消</button>
+								<button className="danger" onClick={() => void confirmDeleteSkill()}>
+									确认删除
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
 
 				{toast && <div className="config-toast">{toast}</div>}
 			</div>

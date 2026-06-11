@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.4.16-green)
+![Version](https://img.shields.io/badge/version-0.4.17-green)
 
 `pi-desktop` **不是** pi 的分支。它是一个轻量 Electron 外壳，通过启动多个 `pi --mode rpc` 进程，将项目管理、会话管理、对话界面、配置管理和工具编排整合到一个原生桌面应用中——所有 Agent 能力由 pi 原生提供。
 
@@ -16,12 +16,12 @@
 
 ## 📋 更新日志
 
-> **最新版本 v0.4.16**（2026-06-11）
+> **最新版本 v0.4.17**（2026-06-11）
 
-### v0.4.16 更新
-- 📊 匿名使用统计：打包应用每天最多发送一次 `app_heartbeat`，用于统计版本分布、平台兼容性和活跃安装数量。
-- 🔒 隐私控制：设置页新增“匿名使用统计”开关，可随时关闭；不会采集项目路径、代码、消息内容、会话内容或文件名。
-- 🧪 稳定性：新增 telemetry 单元测试，覆盖禁用、未打包、缺少 key、每日限频和 PostHog 用户属性同步等边界。
+### v0.4.17 更新
+- 🧩 Skill 管理：配置弹窗新增独立 Skills 页面，可查看全局 Skill、创建模板、启用/禁用、删除和打开目录。
+- 🛠️ pi 路径兜底：自动检测失败时可手动输入 pi 路径，支持带引号、双反斜杠、无扩展名和包含空格的 Windows `.cmd` 路径。
+- 🎨 体验优化：设置页可直接查看/修改 pi 路径并原地检测；Skill 列表和删除确认弹窗改为应用内一致风格。
 
 [查看完整更新日志 →](CHANGELOG.zh-CN.md)
 
@@ -33,7 +33,7 @@
 |---|---|
 | **多项目工作区** | 添加、搜索、拖动排序和切换本地项目目录，同时运行多个 pi Agent，项目间完全隔离。 |
 | **内置 Chat 对话区** | 项目列表顶部固定 Chat 入口，写入应用用户目录，适合无需绑定代码项目的通用对话。 |
-| **配置管理** | 可视化编辑器管理 pi 的 `models.json`、`auth.json`、`settings.json`，支持 Provider 重命名、模型拉取、连接测试和请求头/User-Agent 配置。 |
+| **配置与 Skill 管理** | 可视化编辑器管理 pi 的 `models.json`、`auth.json`、`settings.json`，并可管理全局 Skills（查看、创建、启用/禁用、删除、打开目录）。 |
 | **代理设置** | 独立管理 pi agent 子进程代理和桌面端代理，模型拉取与连接测试可走桌面端代理。 |
 | **斜线命令 & `!` Shell** | 内置斜线命令建议（`/compact`、`/session` 等），支持 `!command` / `!!command` 在聊天输入框直接执行 Shell 命令。 |
 | **内嵌终端 Dock** | 当前 Agent 绑定独立终端 tab，支持 PowerShell/cmd/sh fallback、多 tab、主题切换、拖拽高度、右键复制选区和关闭确认。 |
@@ -94,7 +94,7 @@ pi-desktop
 │  ├─ 项目和 Agent 列表
 │  ├─ 聊天时间线（流式输出）
 │  ├─ 文件 / 历史抽屉
-│  ├─ 配置管理弹窗（Models / Auth / Settings / 源文件）
+│  ├─ 配置与 Skill 管理弹窗（配置管理 / Skills）
 │  ├─ Agent 绑定的 Terminal Dock
 │  ├─ 模型与上下文状态栏
 │  ├─ 会话结束修改摘要与更新提示弹窗

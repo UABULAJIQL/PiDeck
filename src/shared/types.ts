@@ -171,6 +171,8 @@ export type AppSettings = {
 	desktopProxyUrl: string;
 	/** 桌面端代理绕过列表，对应 Electron proxyBypassRules */
 	desktopProxyBypass: string;
+	/** 用户手动指定的 pi CLI 命令路径，自动检测不到时用于兜底 */
+	customPiPath: string;
 	/** 是否发送匿名、低频、最小字段的使用统计 */
 	telemetryEnabled: boolean;
 	/** 本地生成的匿名安装标识，不包含账号、路径或机器名 */
@@ -185,6 +187,38 @@ export type PiInstallStatus = {
 	version?: string;
 	searchedDirs: string[];
 	error?: string;
+};
+
+export type PiSkillLocation = {
+	id: "pi-global" | "agents-global";
+	label: string;
+	path: string;
+	rootMarkdownEnabled: boolean;
+};
+
+export type PiSkillSummary = {
+	id: string;
+	name: string;
+	description: string;
+	path: string;
+	dir: string;
+	sourceId: PiSkillLocation["id"];
+	sourceLabel: string;
+	type: "directory" | "markdown";
+	enabled: boolean;
+	valid: boolean;
+	warnings: string[];
+};
+
+export type PiSkillListResult = {
+	locations: PiSkillLocation[];
+	skills: PiSkillSummary[];
+};
+
+export type CreatePiSkillInput = {
+	name: string;
+	description: string;
+	locationId: PiSkillLocation["id"];
 };
 
 export type PiProxyTestResult = {

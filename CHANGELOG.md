@@ -4,6 +4,22 @@
 
 All notable changes to pi-desktop are documented here.
 
+## v0.4.17 - 2026-06-11
+
+### Added
+- Global Skill management: the configuration modal now has a standalone Skills page for listing skills from `~/.pi/agent/skills` and `~/.agents/skills`.
+- Skill actions: create a Skill template, enable or disable model invocation, delete a Skill with an in-app confirmation dialog, and open Skill folders from the desktop UI.
+- Manual pi path fallback: users can enter a custom pi path when automatic detection fails, and the Settings page now shows the active pi path inline.
+
+### Fixed
+- Windows pi command validation now supports `.cmd` shim paths containing spaces by preserving the hand-built `cmd.exe /c` command line.
+- Manual pi path validation now normalizes quoted paths, doubled backslashes, and extension-less paths before saving the usable command.
+- Windows detection no longer relies on PowerShell `pi.ps1` shims, reducing quoting and execution-policy failures.
+
+### Improved
+- Skill rows now use the same compact card style as the session history list.
+- pi environment detection failures now show inline details in Settings, while startup detection still uses the environment dialog.
+
 ## v0.4.16 - 2026-06-11
 
 ### Added

@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.4.16-green)
+![Version](https://img.shields.io/badge/version-0.4.17-green)
 
 `pi-desktop` is **not** a fork of pi. It is a lightweight Electron shell that orchestrates multiple `pi --mode rpc` processes, providing a native desktop UI for projects, sessions, conversations, configuration, and tool orchestration — all powered by pi's native agent capabilities.
 
@@ -16,12 +16,12 @@
 
 ## 📋 Changelog
 
-> **Latest: v0.4.16** (2026-06-11)
+> **Latest: v0.4.17** (2026-06-11)
 
-### v0.4.16 Updates
-- 📊 Anonymous usage statistics: packaged builds send at most one `app_heartbeat` per day to understand version distribution, platform compatibility, and active installations.
-- 🔒 Privacy control: Settings now includes an “Anonymous usage statistics” switch that can be turned off at any time; project paths, code, message content, session content, and file names are not collected.
-- 🧪 Stability: added telemetry unit tests covering opt-out, unpackaged builds, missing keys, daily throttling, and PostHog person property sync.
+### v0.4.17 Updates
+- 🧩 Skill management: the configuration modal now has a standalone Skills page for listing global skills, creating templates, toggling enablement, deleting skills, and opening skill folders.
+- 🛠️ pi path fallback: when automatic detection fails, users can enter a pi path manually; quoted paths, doubled backslashes, extension-less paths, and Windows `.cmd` paths with spaces are supported.
+- 🎨 UX polish: the Settings page now shows and validates the active pi path inline, while the Skill list and delete confirmation use the app's native list/dialog styling.
 
 [View Full Changelog →](CHANGELOG.md)
 
@@ -33,7 +33,7 @@
 |---|---|
 | **Multi-Project Workspace** | Add, search, drag-sort, and switch between local project folders. Run multiple pi agents simultaneously with per-project isolation. |
 | **Built-in Chat Workspace** | A fixed Chat entry at the top of the project list writes to the app user-data directory for general conversations that do not need a code project. |
-| **Configuration Management** | Visual editors for pi's `models.json`, `auth.json`, and `settings.json` — manage providers, API keys, model discovery, connection tests, and request headers without touching JSON files manually. |
+| **Configuration & Skill Management** | Visual editors for pi's `models.json`, `auth.json`, and `settings.json`, plus global Skill management for listing, creating, enabling/disabling, deleting, and opening skill folders. |
 | **Proxy Settings** | Manage pi agent process proxy and desktop proxy separately; model discovery and connection tests can use the desktop proxy. |
 | **Slash Commands & `!` Shell** | Built-in slash command suggestions (`/reload`, `/compact`, `/session`, …) and `!command` / `!!command` for inline shell execution directly in the chat composer. |
 | **Embedded Terminal Dock** | Agent-scoped terminal tabs with PowerShell/cmd/sh fallback, multiple tabs, theme switching, height resizing, right-click selection copy, and close-all confirmation. |
@@ -94,7 +94,7 @@ pi-desktop
 │  ├─ Project & agent list
 │  ├─ Chat timeline with streaming
 │  ├─ File / history drawers
-│  ├─ Configuration modal (Models / Auth / Settings / Source)
+│  ├─ Configuration and Skill modal (Configuration / Skills)
 │  ├─ Agent-scoped Terminal Dock
 │  ├─ Model & context status bar
 │  ├─ Session file-change summary and update prompt modal

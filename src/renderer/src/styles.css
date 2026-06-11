@@ -64,105 +64,230 @@ button:disabled {
 	background: #fff;
 	box-shadow: 0 24px 80px rgba(31, 35, 41, 0.18);
 }
+
+/* ── environment body ───────────────────────────── */
 .environment-body {
-	padding: 22px 24px 14px;
-}
-.lead {
-	color: #65707d;
-	line-height: 1.7;
-}
-.env-success {
-	display: grid;
-	gap: 8px;
-	padding: 18px;
-	border: 1px solid #bfe8cf;
-	border-radius: 14px;
-	background: #f0fff5;
-	color: #176b35;
-	overflow-wrap: anywhere;
-}
-.env-success small {
-	color: #629a74;
-}
-.setup-steps {
-	display: grid;
+	padding: 16px 24px 4px;
+	overflow-y: auto;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
 	gap: 12px;
-	margin: 24px 0;
 }
-.setup-steps > div {
-	display: grid;
-	gap: 6px;
+
+/* ── 统一卡片容器：所有环境检测区块使用一致的外观 ── */
+.env-card {
 	padding: 14px 16px;
 	border: 1px solid #e5eaf1;
-	border-radius: 14px;
+	border-radius: 12px;
 	background: #f8fafc;
-}
-.setup-steps span {
-	color: #6d7683;
-}
-.setup-steps code,
-.onboarding-error {
-	overflow: auto;
-	border-radius: 10px;
-	background: #111827;
-	color: #d9f99d;
-	padding: 10px 12px;
-	font-family: "Cascadia Code", Consolas, monospace;
-}
-.onboarding-actions {
 	display: flex;
-	gap: 10px;
-	margin-bottom: 18px;
+	flex-direction: column;
+	gap: 6px;
 }
+.env-card > strong {
+	color: #3b424c;
+	font-size: 13px;
+}
+.env-card > small {
+	color: #65707d;
+	line-height: 1.55;
+	font-size: 12px;
+}
+
+/* ── 加载状态卡片 ──────────────────────────────── */
+.env-loading-card {
+	flex-direction: row;
+	align-items: center;
+	gap: 10px;
+	padding: 18px 16px;
+	color: #65707d;
+}
+
+/* ── 成功状态卡片 ──────────────────────────────── */
+.env-success-card {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 14px;
+	border-color: #bfe8cf;
+	background: #f0fff5;
+}
+.env-success-icon {
+	flex-shrink: 0;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: #2b8a3e;
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 16px;
+	font-weight: 700;
+}
+.env-success-info {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+.env-success-info strong {
+	color: #176b35;
+	font-size: 14px;
+}
+.env-success-info span {
+	color: #2b8a3e;
+	font-size: 12px;
+	word-break: break-all;
+}
+.env-success-info small {
+	color: #629a74;
+	font-size: 12px;
+}
+
+/* ── 错误详情卡片 ──────────────────────────────── */
+.env-error-card {
+	border-color: #ffc9c9;
+	background: #fff5f5;
+}
+.env-error-card strong {
+	color: #c92a2a;
+}
+.env-error-pre {
+	margin: 4px 0 0;
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: #fff;
+	border: 1px solid #ffc9c9;
+	color: #e03131;
+	font-size: 12px;
+	font-family: "Cascadia Code", Consolas, monospace;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+	line-height: 1.6;
+}
+
+/* ── 通用卡片内按钮 ────────────────────────────── */
+.env-card-btn {
+	align-self: flex-start;
+	border: none;
+	border-radius: 8px;
+	padding: 7px 16px;
+	background: #f0f2f5;
+	color: #3b424c;
+	font-size: 12px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.env-card-btn.primary {
+	background: #4c6ef5;
+	color: #fff;
+}
+.env-card-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* ── 已搜索目录卡片 ────────────────────────────── */
+.env-dirs-list {
+	max-height: 150px;
+	overflow: auto;
+	margin: 4px 0 0;
+	padding-left: 18px;
+	scrollbar-gutter: stable;
+	font-size: 12px;
+	color: #65707d;
+}
+.env-dirs-list li {
+	margin: 3px 0;
+	word-break: break-all;
+}
+
+/* ── 终端参考命令 ──────────────────────────────── */
+.ref-commands {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.ref-command-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	background: #eef0f3;
+	font-size: 12px;
+}
+.ref-label {
+	flex-shrink: 0;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background: #4c6ef5;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+}
+.ref-command-item code {
+	flex: 1;
+	font-size: 12px;
+	color: #3b424c;
+	word-break: break-all;
+	user-select: all;
+}
+
+/* ── 自定义路径输入行 ──────────────────────────── */
+.custom-path-input-row {
+	display: flex;
+	gap: 8px;
+}
+.custom-path-input-row input {
+	flex: 1;
+	padding: 7px 10px;
+	border: 1px solid #d5dbe4;
+	border-radius: 8px;
+	font-size: 13px;
+	background: #fff;
+	outline: none;
+}
+.custom-path-input-row input:focus {
+	border-color: #4c6ef5;
+	box-shadow: 0 0 0 2px rgba(76, 110, 245, 0.15);
+}
+
+/* ── 校验结果提示 ──────────────────────────────── */
+.custom-path-result {
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+.custom-path-result.success {
+	background: #e6f7e9;
+	color: #2b8a3e;
+}
+.custom-path-result.error {
+	background: #ffe3e3;
+	color: #c92a2a;
+}
+
+/* ── footer ────────────────────────────────────── */
 .environment-footer {
 	display: flex;
 	justify-content: flex-start;
-	padding: 0 24px 16px;
+	padding: 10px 24px 16px;
 }
-.onboarding-actions button,
-.environment-footer button,
-.setup-steps button {
+.environment-footer button {
 	border: 1px solid #b8d8ff;
 	border-radius: 10px;
 	background: #1677ff;
 	color: #fff;
 	padding: 10px 16px;
+	font-size: 13px;
+	cursor: pointer;
 }
-.onboarding-actions .secondary {
-	background: #fff;
-	color: #1677ff;
-}
-.check-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	margin: 24px 0;
-	color: #65707d;
-}
-.searched-paths {
-	margin: 0 24px 22px;
-	padding: 14px;
-	min-height: 0;
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #f8fafc;
-	color: #65707d;
-}
-.searched-paths strong {
-	display: block;
-	margin-bottom: 8px;
-	color: #3b424c;
-}
-.searched-paths ul {
-	max-height: 150px;
-	overflow: auto;
-	margin: 0;
-	padding-left: 18px;
-	scrollbar-gutter: stable;
-}
-.searched-paths li {
-	margin: 4px 0;
-	word-break: break-all;
+.environment-footer button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .wechat-shell {
@@ -3699,6 +3824,42 @@ body.is-composer-resizing .composer-resize-handle::after {
 .setting-status.info {
 	color: #667085;
 }
+.setting-path,
+.setting-error-detail {
+	word-break: break-all;
+}
+.setting-error-detail {
+	line-height: 1.5;
+}
+.setting-pi-path-panel {
+	margin: 4px 0 8px;
+	padding: 12px;
+	border: 1px solid #e5eaf1;
+	border-radius: 12px;
+	background: #f8fafc;
+}
+.setting-pi-path-panel .setting-field {
+	margin-top: 0;
+}
+.setting-pi-path-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+.setting-pi-path-actions button {
+	border: 1px solid #b8d8ff;
+	border-radius: 8px;
+	background: #fff;
+	color: #1677ff;
+	padding: 7px 12px;
+	white-space: nowrap;
+}
+.setting-pi-path-actions button:disabled {
+	border-color: #d7dce4;
+	color: #98a2b3;
+	cursor: not-allowed;
+}
 .setting-row button {
 	border: 1px solid #b8d8ff;
 	border-radius: 8px;
@@ -3749,6 +3910,27 @@ body.is-composer-resizing .composer-resize-handle::after {
 	overflow: hidden;
 }
 
+.config-primary-tabs {
+	display: flex;
+	gap: 8px;
+	padding: 12px 18px 0;
+	background: #fff;
+}
+.config-primary-tabs button {
+	border: 1px solid #e5eaf1;
+	border-radius: 999px;
+	background: #f8fafc;
+	color: #65707d;
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.config-primary-tabs button.active {
+	border-color: #b8dfb8;
+	background: #ecfdf5;
+	color: #15803d;
+}
 .config-tabs {
 	display: flex;
 	gap: 0;
@@ -5355,4 +5537,190 @@ body.is-composer-resizing .composer-resize-handle::after {
 .update-actions button:disabled {
 	opacity: 0.6;
 	cursor: default;
+}
+
+/* ── Skills Tab ─────────────────────────────────────── */
+.skills-tab {
+	display: grid;
+	gap: 14px;
+}
+.skills-tab .config-toolbar > div:first-child {
+	display: grid;
+	gap: 4px;
+}
+.skills-restart-hint {
+	color: #7d8794;
+	font-size: 12px;
+}
+.skills-toolbar-actions {
+	display: flex;
+	gap: 8px;
+}
+.skill-create-card {
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid #e5eaf1;
+	border-radius: 12px;
+	background: #f8fafc;
+}
+.skill-create-card > strong {
+	color: #2b3038;
+}
+.skill-create-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+	gap: 12px;
+}
+.skill-create-card label {
+	display: grid;
+	gap: 6px;
+	color: #4c5664;
+	font-size: 13px;
+}
+.skill-create-card input,
+.skill-create-card select,
+.skill-create-card textarea {
+	border: 1px solid #d7dce4;
+	border-radius: 8px;
+	background: #fff;
+	padding: 8px 10px;
+	color: #2b3038;
+}
+.skill-create-card textarea {
+	min-height: 72px;
+	resize: vertical;
+}
+.skill-location-picker {
+	position: relative;
+}
+.skill-location-picker > button {
+	width: 100%;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	border: 1px solid #d7dce4;
+	border-radius: 8px;
+	background: #fff;
+	color: #2b3038;
+	padding: 0 10px;
+	text-align: left;
+}
+.skill-location-picker > button.open {
+	border-color: #b8dfb8;
+	box-shadow: 0 0 0 2px rgba(20, 184, 20, 0.1);
+}
+.skill-location-picker > button span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.skill-location-picker > button b {
+	color: #8a94a6;
+	font-size: 13px;
+}
+.skill-location-menu {
+	position: absolute;
+	z-index: 20;
+	left: 0;
+	right: 0;
+	top: calc(100% + 6px);
+	padding: 6px;
+	border: 1px solid #dfe5ee;
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 14px 34px rgba(31, 35, 41, 0.16);
+}
+.skill-location-menu button {
+	width: 100%;
+	display: grid;
+	gap: 2px;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	text-align: left;
+	color: #2b3038;
+}
+.skill-location-menu button:hover,
+.skill-location-menu button.active {
+	background: #ecfdf5;
+}
+.skill-location-menu button strong {
+	font-size: 13px;
+	font-weight: 600;
+}
+.skill-location-menu button small {
+	font-size: 11px;
+	color: #8a94a6;
+	word-break: break-all;
+}
+.skill-create-card button {
+	justify-self: start;
+}
+.skills-list {
+	display: grid;
+	gap: 10px;
+}
+.skill-card-main {
+	gap: 5px;
+}
+.skill-title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.skill-title-row strong {
+	flex: 0 1 auto;
+}
+.skill-badges {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-shrink: 0;
+}
+.skill-state {
+	padding: 2px 6px;
+	border-radius: 999px;
+	font-size: 11px;
+}
+.skill-state.enabled {
+	background: #e6f7e9;
+	color: #168a4a;
+}
+.skill-state.disabled {
+	background: #eef0f3;
+	color: #667085;
+}
+.skill-state.invalid {
+	background: #ffe3e3;
+	color: #d93025;
+}
+.skill-card small {
+	white-space: nowrap;
+	word-break: normal;
+}
+.skill-warnings {
+	margin: 2px 0 0;
+	padding-left: 18px;
+	color: #d93025;
+	font-size: 12px;
+}
+.skill-card-actions {
+	align-items: center;
+}
+.skill-delete-confirm small {
+	display: block;
+	margin-top: -4px;
+	color: #8a94a6;
+	font-size: 12px;
+	word-break: break-all;
+}
+@media (max-width: 820px) {
+	.skill-create-grid {
+		grid-template-columns: 1fr;
+	}
 }

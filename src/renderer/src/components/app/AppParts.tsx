@@ -56,9 +56,22 @@ export function EnvironmentDialog(props: {
 	onClose: () => void;
 	onRecheck: () => void;
 	onOpenInstallDocs: () => void;
+	/** 用户手动输入的 pi 路径 */
+	customPath: string;
+	/** 正在校验自定义路径 */
+	customPathValidating: boolean;
+	/** 自定义路径校验结果 */
+	customPathResult: PiInstallStatus | null;
+	onCustomPathChange: (path: string) => void;
+	onValidateCustomPath: () => void;
 }) {
-	const installed = props.status?.installed;
+	const installed = props.status?.installed || props.customPathResult?.installed;
 	const searchedDirs = props.status?.searchedDirs.slice(0, 16) ?? [];
+	const errorText = props.status?.error ?? props.customPathResult?.error;
+
+	// Windows 统一使用 CMD 查找 .cmd/.exe shim，不再引导用户使用 PowerShell 的 .ps1 入口。
+	const refCmd = 'where pi';
+
 	return (
 		<div className="modal-backdrop environment-backdrop">
 			<section className="environment-modal">
@@ -66,64 +79,137 @@ export function EnvironmentDialog(props: {
 					<strong>pi 环境检测</strong>
 					<button onClick={props.onClose}>×</button>
 				</div>
+
 				<div className="environment-body">
-					{props.checking ? (
-						<div className="check-row">
+					{props.checking && (
+						<div className="env-card env-loading-card">
 							<div className="loader" />
 							<span>正在检测 pi CLI…</span>
 						</div>
-					) : installed ? (
-						<div className="env-success">
-							<strong>检测通过</strong>
-							<span>
-								已找到 {props.status?.command}{" "}
-								{props.status?.version ? `(${props.status.version})` : ""}
-							</span>
-							<small>窗口将在 3 秒后自动关闭。</small>
+					)}
+
+					{!props.checking && installed && (
+						<div className="env-card env-success-card">
+							<div className="env-success-icon">✓</div>
+							<div className="env-success-info">
+								<strong>检测通过</strong>
+								<span>
+									路径：{(props.customPathResult || props.status)?.command}
+								</span>
+								{(props.customPathResult || props.status)?.version && (
+									<span>
+										版本：{(props.customPathResult || props.status)!.version}
+									</span>
+								)}
+								<small>窗口将在 3 秒后自动关闭。</small>
+							</div>
 						</div>
-					) : (
+					)}
+
+					{!props.checking && !installed && (
 						<>
-							<p className="lead">
-								没有检测到可用的 <strong>pi</strong>{" "}
-								命令。你仍可浏览项目，但创建 agent 前需要先安装并配置 pi CLI。
-							</p>
-							<div className="setup-steps">
-								<div>
-									<strong>打开官方安装指引</strong>
-									<span>请按 pi 官方 quickstart 安装并配置 CLI。</span>
+							{/* 状态说明卡片 */}
+							<div className="env-card env-status-card">
+								<strong>未检测到 pi CLI</strong>
+								<small>
+									桌面端通过系统 PATH 和常见包管理器路径自动查找 pi
+									命令。如果 pi 已安装但未被检测到，可以通过下方参考命令在终端中找到路径后手动指定。
+								</small>
+							</div>
+
+							{/* 自动检测错误信息（如有） */}
+							{errorText && (
+								<div className="env-card env-error-card">
+									<strong>检测错误详情</strong>
+									<pre className="env-error-pre">{errorText}</pre>
+								</div>
+							)}
+
+							{/* 安装指引卡片 */}
+							<div className="env-card env-guide-card">
+								<strong>还没安装 pi？</strong>
+								<small>
+									请按 pi 官方 quickstart 安装并配置 CLI，安装后重新打开应用或点击下方"重新检测"。
+								</small>
+								<button
+									className="env-card-btn"
+									onClick={props.onOpenInstallDocs}
+								>
+									打开安装文档
+								</button>
+							</div>
+
+							{/* 手动输入 pi 路径卡片 */}
+							<div className="env-card env-custom-card">
+								<strong>手动指定 pi 路径</strong>
+								<small>
+									如果 pi 已安装但桌面端检测不到（如使用了 nvm、pnpm
+									全局安装、或自定义 mise 数据目录），可运行下方 CMD 命令，将输出的 pi.cmd 或 pi.exe 路径粘贴到输入框中。
+								</small>
+								<div className="ref-commands">
+									<div className="ref-command-item">
+										<span className="ref-label">CMD</span>
+										<code>{refCmd}</code>
+									</div>
+
+								</div>
+								<div className="custom-path-input-row">
+									<input
+										type="text"
+										placeholder="D:\\mise-data\\installs\\node\\24 13 0\\pi.cmd"
+										value={props.customPath}
+										onChange={(e) =>
+											props.onCustomPathChange(e.target.value)
+										}
+										disabled={props.customPathValidating}
+									/>
 									<button
-										onClick={props.onOpenInstallDocs}
+										className="env-card-btn primary"
+										onClick={props.onValidateCustomPath}
+										disabled={
+											!props.customPath.trim() ||
+											props.customPathValidating
+										}
 									>
-										打开安装文档
+										{props.customPathValidating
+											? "校验中…"
+											: "校验并使用"}
 									</button>
 								</div>
-								<div>
-									<strong>配置后重新检测</strong>
-									<span>安装完成后重新打开应用，或点击下方“重新检测”。</span>
-								</div>
+								{props.customPathResult && (
+									<div
+										className={`custom-path-result ${props.customPathResult.installed ? "success" : "error"}`}
+									>
+										{props.customPathResult.installed
+											? `✓ 校验通过：${props.customPathResult.version ?? "pi"}`
+											: `✗ 校验失败：${props.customPathResult.error ?? "无法执行该路径"}`}
+									</div>
+								)}
 							</div>
-							{props.status?.error && (
-								<pre className="onboarding-error">{props.status.error}</pre>
+
+							{/* 检测路径卡片 */}
+							{searchedDirs.length > 0 && (
+								<div className="env-card env-dirs-card">
+									<strong>已搜索的目录</strong>
+									<small>桌面端自动检测时扫描了以下目录：</small>
+									<ul className="env-dirs-list">
+										{searchedDirs.map((dir) => (
+											<li key={dir}>{dir}</li>
+										))}
+									</ul>
+								</div>
 							)}
 						</>
 					)}
 				</div>
+
 				<div className="environment-footer">
-					<button onClick={props.onRecheck} disabled={props.checking}>
+					<button
+						onClick={props.onRecheck}
+						disabled={props.checking || props.customPathValidating}
+					>
 						重新检测
 					</button>
-				</div>
-				<div className="searched-paths">
-					<strong>检测路径</strong>
-					{searchedDirs.length > 0 ? (
-						<ul>
-							{searchedDirs.map((dir) => (
-								<li key={dir}>{dir}</li>
-							))}
-						</ul>
-					) : (
-						<span>检测完成后显示已搜索路径。</span>
-					)}
 				</div>
 			</section>
 		</div>
@@ -191,11 +277,11 @@ export function ComposerToolbar(props: {
 						props.compacting ||
 						!!props.state?.isStreaming
 					}
-					title={`上下文: ${ctxPercent.toFixed(1)}% — 点击压缩上下文释放空间`}
+					title={`上下文: ${ctxPercent.toFixed(1)}% - 点击压缩上下文释放空间`}
 					onClick={props.onCompact}
 				>
 					{props.state?.isCompacting || props.compacting
-						? "压缩中…"
+						? "压缩中..."
 						: `Compact ${ctxPercent.toFixed(0)}%`}
 				</button>
 			)}
@@ -214,7 +300,7 @@ export function ModelPicker(props: {
 	const currentModelKey = props.current?.provider && props.current?.modelId
 		? `${props.current.provider}/${props.current.modelId}`
 		: undefined;
-	// 搜索同时覆盖模型展示名、模型 id 和 provider，避免用户只记得任一字段时找不到模型。
+	// 搜索同时覆盖模型展示名、模型 id 和 provider,避免用户只记得任一字段时找不到模型。
 	const filteredModels = normalizedSearch
 		? props.models.filter((model) =>
 				[
@@ -276,14 +362,14 @@ export function ModelPicker(props: {
 }
 
 const THINKING_LEVELS = [
-	{ value: "off", label: "Off", description: "关闭模型思考，优先速度和成本" },
-	// minimal 是 pi/Codex reasoning 的最轻量档位，放在 Off 与 Low 之间便于按强度递增选择。
-	{ value: "minimal", label: "Minimal", description: "最少量思考，适合简单问答和轻量修改" },
-	{ value: "low", label: "Low", description: "更快响应，适合日常小改动" },
+	{ value: "off", label: "Off", description: "关闭模型思考,优先速度和成本" },
+	// minimal 是 pi/Codex reasoning 的最轻量档位,放在 Off 与 Low 之间便于按强度递增选择。
+	{ value: "minimal", label: "Minimal", description: "最少量思考,适合简单问答和轻量修改" },
+	{ value: "low", label: "Low", description: "更快响应,适合日常小改动" },
 	{ value: "medium", label: "Medium", description: "平衡速度和推理深度" },
-	{ value: "high", label: "High", description: "更深推理，适合复杂任务" },
-	// xhigh 只在部分模型上可用；选择后以前端收到的 runtime state 为准，必要时提示用户已被回退。
-	{ value: "xhigh", label: "XHigh", description: "最高推理档，需当前模型支持" },
+	{ value: "high", label: "High", description: "更深推理,适合复杂任务" },
+	// xhigh 只在部分模型上可用;选择后以前端收到的 runtime state 为准,必要时提示用户已被回退。
+	{ value: "xhigh", label: "XHigh", description: "最高推理档,需当前模型支持" },
 ];
 
 export function ThinkingPicker(props: {
@@ -361,7 +447,7 @@ export function BranchSelector(props: {
 				className="branch-trigger"
 				disabled={Boolean(props.switchingBranch)}
 				onClick={() => setOpen((v) => !v)}
-				title={`当前分支: ${current}，共 ${branches.length} 个分支`}
+				title={`当前分支: ${current},共 ${branches.length} 个分支`}
 			>
 				<span className="branch-icon">
 					<GitBranch size={14} />
@@ -399,7 +485,7 @@ export function BranchSelector(props: {
 								)}
 							</span>
 							<span className="branch-item-label" title={branch}>
-								{switching ? "切换中…" : branch}
+								{switching ? "切换中..." : branch}
 							</span>
 						</button>
 					);
@@ -426,7 +512,7 @@ export function LogoMark() {
 }
 
 export function ProjectAvatar(props: { name: string }) {
-	// 项目名以 . 开头时，首字符头像会只显示一个点；跳过前导点/空白，保证隐藏目录也能显示可识别的业务名称首字母。
+	// 项目名以 . 开头时,首字符头像会只显示一个点;跳过前导点/空白,保证隐藏目录也能显示可识别的业务名称首字母。
 	const avatarText =
 		props.name
 			.replace(/^[.\s]+/, "")
@@ -469,11 +555,11 @@ export function displayPath(path?: string) {
 		home && normalized.toLowerCase().startsWith(home.toLowerCase())
 			? `~${normalized.slice(home.length)}`
 			: normalized;
-	return friendly.length > 36 ? `…${friendly.slice(-35)}` : friendly;
+	return friendly.length > 36 ? `...${friendly.slice(-35)}` : friendly;
 }
 
 function getHomePathPrefix() {
-	// 浏览器侧无法直接读取 OS home；从常见 Windows 用户路径中提取到 /Users/name，其他路径保持原样。
+	// 浏览器侧无法直接读取 OS home;从常见 Windows 用户路径中提取到 /Users/name,其他路径保持原样。
 	const match = location.href.match(/file:\/\/\/([A-Za-z]:\/Users\/[^/]+)/i);
 	return match?.[1] ?? "C:/Users/14012";
 }
@@ -536,7 +622,7 @@ export function groupToolMessages(messages: ChatMessage[]): RenderMessage[] {
 
 	function flushTools() {
 		if (currentTools.length === 0) return;
-		// 同一轮问答里的连续 tool 消息聚合显示，减少工具调用刷屏；详情仍保留在每条 tool 的 meta 里可展开查看。
+		// 同一轮问答里的连续 tool 消息聚合显示,减少工具调用刷屏;详情仍保留在每条 tool 的 meta 里可展开查看。
 		const group: ToolGroupItem = {
 			kind: "tool-group",
 			id: currentTools.map((message) => message.id).join("|"),
@@ -597,7 +683,7 @@ export function ThinkingBubble(props: { thinking?: string; showThinking?: boolea
 	const displayText =
 		expanded || !needsTruncate
 			? (props.thinking ?? "")
-			: (props.thinking ?? "").slice(0, previewLen) + "…";
+			: (props.thinking ?? "").slice(0, previewLen) + "...";
 
 	return (
 		<article className="chat-message assistant thinking-message">
@@ -637,7 +723,7 @@ export function ThinkingBubble(props: { thinking?: string; showThinking?: boolea
 
 export function ToolGroup(props: { group: ToolGroupItem }) {
 	const [expanded, setExpanded] = useState(false);
-	// 工具消息按 toolCallId 原地更新；最后一条仍为 running 时，表示当前工具组还没收尾。
+	// 工具消息按 toolCallId 原地更新;最后一条仍为 running 时,表示当前工具组还没收尾。
 	const running =
 		props.group.messages.length > 0 &&
 		props.group.messages[props.group.messages.length - 1].meta?.status ===
@@ -801,10 +887,10 @@ export function ImagePreviewModal(props: {
 	);
 }
 
-// ANSI 转义码正则：匹配 \x1b[...m 等终端颜色/样式序列
+// ANSI 转义码正则:匹配 \x1b[...m 等终端颜色/样式序列
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
 
-/** 去除 pi 输出中的 ANSI 终端转义码，避免在 React UI 中显示原始 \e[38;5;109m 等文本 */
+/** 去除 pi 输出中的 ANSI 终端转义码,避免在 React UI 中显示原始 \e[38;5;109m 等文本 */
 function stripAnsi(text: string): string {
 	return text.replace(ANSI_RE, "");
 }
@@ -834,7 +920,7 @@ export function ChatBubble(props: {
 	const thinkingDisplayText =
 		thinkingExpanded || !thinkingNeedsTruncate
 			? (message.thinking ?? "")
-			: (message.thinking ?? "").slice(0, thinkingPreviewLen) + "…";
+			: (message.thinking ?? "").slice(0, thinkingPreviewLen) + "...";
 	const label = message.role === "assistant" ? "pi" : message.role;
 	const deliveryBehavior =
 		message.role === "user" ? message.meta?.streamingBehavior : undefined;
@@ -848,7 +934,7 @@ export function ChatBubble(props: {
 		typeof message.meta?.detailText === "string"
 			? message.meta.detailText
 			: JSON.stringify(message.meta ?? {}, null, 2);
-	// 过滤 ANSI 转义码，pi 终端输出的颜色序列在桌面 UI 中无意义
+	// 过滤 ANSI 转义码,pi 终端输出的颜色序列在桌面 UI 中无意义
 	const cleanText = stripAnsi(message.text);
 	const cleanDetail = stripAnsi(detailText);
 	return (
@@ -873,8 +959,8 @@ export function ChatBubble(props: {
 								className={`message-delivery-badge ${deliveryBehavior === "followUp" ? "follow-up" : "steer"}`}
 								title={
 									deliveryBehavior === "followUp"
-										? "followUp：等待 agent 停止后发送"
-										: "steer：当前工具调用后、下一次 LLM 调用前生效"
+										? "followUp:等待 agent 停止后发送"
+										: "steer:当前工具调用后、下一次 LLM 调用前生效"
 								}
 							>
 								{deliveryLabel}
@@ -884,7 +970,7 @@ export function ChatBubble(props: {
 					</time>
 				</div>
 				<div className={`msg-bubble ${isUser ? "" : "markdown-body"}`}>
-					{/* 思考内容展示：可折叠，默认收起长文本 */}
+					{/* 思考内容展示:可折叠,默认收起长文本 */}
 					{hasThinking && (
 						<div className="thinking-block">
 							<div
@@ -914,7 +1000,7 @@ export function ChatBubble(props: {
 							))}
 						</div>
 					)}
-					{/* 用户消息使用纯文本显示，避免特殊字符被 markdown 解释导致渲染异常 */}
+					{/* 用户消息使用纯文本显示,避免特殊字符被 markdown 解释导致渲染异常 */}
 					{isUser ? (
 						<div className="user-message-text">{cleanText}</div>
 					) : (
@@ -961,7 +1047,7 @@ export function ChatBubble(props: {
 							<button
 								onClick={() => {
 									const text = message.text;
-									// 编辑只把原消息放回输入框，不自动发送，方便用户二次加工。
+									// 编辑只把原消息放回输入框,不自动发送,方便用户二次加工。
 									document
 										.querySelector<HTMLTextAreaElement>(".composer-box textarea")
 										?.focus();
@@ -998,7 +1084,7 @@ function CodeBlock(props: React.HTMLAttributes<HTMLPreElement>) {
 	);
 }
 
-/** Markdown 内的链接默认会在 Electron 窗口内导航，这里拦截点击统一用系统浏览器打开。 */
+/** Markdown 内的链接默认会在 Electron 窗口内导航,这里拦截点击统一用系统浏览器打开。 */
 function MarkdownLink(
 	props: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
 		onOpenExternal: (url: string) => void;
@@ -1020,7 +1106,7 @@ function extractText(node: ReactNode): string {
 	return "";
 }
 
-/** 将毫秒数格式化为短可读形式，如 "3.2s" "1m23s" */
+/** 将毫秒数格式化为短可读形式,如 "3.2s" "1m23s" */
 function formatDuration(ms: number): string {
 	if (ms < 1000) return `${ms}ms`;
 	const seconds = Math.floor(ms / 1000);
@@ -1054,7 +1140,7 @@ export function buildOutline(messages: ChatMessage[]) {
 }
 
 function summarizeMessage(text: string) {
-	// 过滤 ANSI 转义码，避免 outline 标题显示乱码
+	// 过滤 ANSI 转义码,避免 outline 标题显示乱码
 	const cleaned = text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 	const firstLine =
 		cleaned
@@ -1062,7 +1148,7 @@ function summarizeMessage(text: string) {
 			.split(/\r?\n/)
 			.map((line) => line.trim())
 			.find(Boolean) ?? "";
-	return firstLine.length > 48 ? `${firstLine.slice(0, 48)}…` : firstLine;
+	return firstLine.length > 48 ? `${firstLine.slice(0, 48)}...` : firstLine;
 }
 
 export function RpcLogModal(props: {
@@ -1085,7 +1171,7 @@ export function RpcLogModal(props: {
 		.filter((log) => directionFilter === "all" || log.direction === directionFilter)
 		.filter((log) => {
 			if (!normalizedKeyword) return true;
-			// 搜索同时覆盖摘要和完整 JSON，方便直接查 502、terminated、auto_retry 等排障关键词。
+			// 搜索同时覆盖摘要和完整 JSON,方便直接查 502、terminated、auto_retry 等排障关键词。
 			return formatRpcLogForCopy(log).toLowerCase().includes(normalizedKeyword);
 		})
 		.slice(-2000);
@@ -1139,7 +1225,7 @@ export function RpcLogModal(props: {
 					<input
 						value={keyword}
 						onChange={(event) => setKeyword(event.target.value)}
-						placeholder="搜索 summary / JSON，例如 502、terminated、auto_retry"
+						placeholder="搜索 summary / JSON,例如 502、terminated、auto_retry"
 					/>
 				</div>
 				<div className="rpc-log-list" ref={panelRef}>
@@ -1181,7 +1267,7 @@ export function RpcLogModal(props: {
 					})}
 					{visibleLogs.length === 0 && (
 						<div className="rpc-log-empty">
-							暂无匹配日志，发送消息后会记录 RPC 通信
+							暂无匹配日志,发送消息后会记录 RPC 通信
 						</div>
 					)}
 				</div>
@@ -1308,7 +1394,7 @@ export function ConversationOutline(props: {
 
 const OUTLINE_TOP_STORAGE_KEY = "pi-desktop:outline-top";
 const CHANGED_LINES_ESTIMATE_HINT =
-	"行数为估算：edit 按 oldText/newText 中较大的行数统计，多个 edit 会累加；write/create 按写入内容行数统计。它不是基于 git diff 的精确修改行数，末尾换行或多次编辑可能让数字偏大。";
+	"行数为估算:edit 按 oldText/newText 中较大的行数统计,多个 edit 会累加;write/create 按写入内容行数统计。它不是基于 git diff 的精确修改行数,末尾换行或多次编辑可能让数字偏大。";
 
 function getInitialOutlineTop() {
 	if (typeof window === "undefined") return 180;
@@ -1364,7 +1450,7 @@ export function DrawerContent(props: {
 					</button>
 					<button
 						disabled={props.pinned}
-						title={props.pinned ? "已固定，取消固定后可折叠" : "折叠面板"}
+						title={props.pinned ? "已固定,取消固定后可折叠" : "折叠面板"}
 						aria-label="折叠面板"
 						onClick={props.onCollapse}
 					>
@@ -1372,7 +1458,7 @@ export function DrawerContent(props: {
 					</button>
 					<button
 						disabled={props.pinned}
-						title={props.pinned ? "已固定，取消固定后可关闭" : "关闭面板"}
+						title={props.pinned ? "已固定,取消固定后可关闭" : "关闭面板"}
 						aria-label="关闭面板"
 						onClick={props.onClose}
 					>
@@ -1426,7 +1512,7 @@ function FilesPanel(props: {
 					{props.modifiedFiles.map((file) => {
 						const fileName = file.path.split(/[/\\]/).pop() ?? file.path;
 						const isRunning = file.status === "running";
-						// 构造最小的 FileTreeNode 以复用右键菜单，保持修改清单和文件树相同的打开/定位入口。
+						// 构造最小的 FileTreeNode 以复用右键菜单,保持修改清单和文件树相同的打开/定位入口。
 						const fakeNode: FileTreeNode = {
 							name: fileName,
 							path: file.path,
@@ -1622,10 +1708,10 @@ function SessionsPanel(props: {
 			filePath: session.filePath,
 			text:
 				actionType === "copy"
-					? "正在复制…"
+					? "正在复制..."
 					: actionType === "export"
-						? "正在导出…"
-						: "正在删除…",
+						? "正在导出..."
+						: "正在删除...",
 		});
 		try {
 			await action();
@@ -1652,7 +1738,7 @@ function SessionsPanel(props: {
 				<div className="sessions-empty">
 					<strong>暂无历史会话</strong>
 					<span>
-						点击项目右侧历史按钮或右键项目打开历史会话；新会话完成后会出现在这里。
+						点击项目右侧历史按钮或右键项目打开历史会话;新会话完成后会出现在这里。
 					</span>
 				</div>
 			)}
@@ -1782,9 +1868,9 @@ function SessionsPanel(props: {
 						className="session-delete-confirm"
 						onClick={(event) => event.stopPropagation()}
 					>
-						<strong>删除会话？</strong>
+						<strong>删除会话?</strong>
 						<p>
-							确认删除「{deleteConfirmSession.name || "Untitled"}」吗？此操作会删除本地会话文件。
+							确认删除「{deleteConfirmSession.name || "Untitled"}」吗?此操作会删除本地会话文件。
 						</p>
 						<div className="session-delete-confirm-actions">
 							<button onClick={() => setDeleteConfirmSession(null)}>取消</button>
@@ -1970,8 +2056,8 @@ const HIDDEN_DESKTOP_BUILTIN_COMMAND_NAMES = new Set([
 ]);
 
 function isBuiltinDesktopCommand(command: PiCommand) {
-	// get_commands 可能返回 source 为空的 pi 内置命令；扩展/skill 命令通常带有自己的 source。
-	// Desktop 只隐藏 CLI 内置命令，避免误伤用户自己安装的同名扩展能力。
+	// get_commands 可能返回 source 为空的 pi 内置命令;扩展/skill 命令通常带有自己的 source。
+	// Desktop 只隐藏 CLI 内置命令,避免误伤用户自己安装的同名扩展能力。
 	return command.source == null || command.source === "builtin";
 }
 
@@ -1982,7 +2068,7 @@ function isVisibleDesktopCommand(command: PiCommand) {
 	);
 }
 
-// pi 内置斜杠命令，get_commands 只返回扩展注册的命令，这些需要手动补充
+// pi 内置斜杠命令,get_commands 只返回扩展注册的命令,这些需要手动补充
 // desktop 已有独立 UI 入口或在 desktop 中不适合执行的命令由 HIDDEN_DESKTOP_COMMAND_NAMES 统一过滤。
 const BUILTIN_COMMANDS: PiCommand[] = [
 	{
@@ -1992,13 +2078,13 @@ const BUILTIN_COMMANDS: PiCommand[] = [
 	},
 	{
 		name: "tree",
-		description: "会话树导航，跳转到任意节点",
+		description: "会话树导航,跳转到任意节点",
 		source: "builtin",
 	},
 	{ name: "clone", description: "复制当前分支到新会话", source: "builtin" },
 	{
 		name: "compact",
-		description: "压缩上下文，可选自定义提示词",
+		description: "压缩上下文,可选自定义提示词",
 		source: "builtin",
 	},
 	{ name: "copy", description: "复制最后一条回复到剪贴板", source: "builtin" },
@@ -2148,11 +2234,11 @@ export function AgentContextMenu(props: {
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onActivate}>打开会话</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onCopySession}>
 					{props.actionLoading === "copy" && <span className="mini-loader" />}
-					{props.actionLoading === "copy" ? "复制中…" : "复制会话"}
+					{props.actionLoading === "copy" ? "复制中..." : "复制会话"}
 				</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onExport}>
 					{props.actionLoading === "export" && <span className="mini-loader" />}
-					{props.actionLoading === "export" ? "导出中…" : "导出 HTML"}
+					{props.actionLoading === "export" ? "导出中..." : "导出 HTML"}
 				</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onShowLogs}>RPC 日志</button>
 				<button onClick={props.onCloseAgent}>关闭 Agent</button>
@@ -2186,6 +2272,12 @@ export function SettingsModal(props: {
 	piProxyNotice: string;
 	piProxyNoticeTone: "info" | "success" | "error";
 	appInfo: AppInfo;
+	customPiPath: string;
+	customPathValidating: boolean;
+	customPathResult: PiInstallStatus | null;
+	onCustomPathChange: (path: string) => void;
+	onValidateCustomPath: () => void;
+	onClearCustomPath: () => void;
 	onCheckPi: () => void;
 	onTestPiProxy: () => void;
 	onCheckUpdate: () => void;
@@ -2194,6 +2286,7 @@ export function SettingsModal(props: {
 	onChange: (patch: Partial<AppSettings>) => void;
 }) {
 	const [activeTab, setActiveTab] = useState<SettingsTabId>("base");
+	const piPath = props.settings.customPiPath || props.piStatus?.command || "";
 	const tabs: Array<{
 		id: SettingsTabId;
 		label: string;
@@ -2281,7 +2374,7 @@ export function SettingsModal(props: {
 									/>
 									<SettingSwitch
 										title="显示思考过程"
-										description="开启后可看到模型推理过程，帮助理解 agent 为什么“卡住”"
+										description={'开启后可看到模型推理过程，帮助理解 agent 为什么"卡住"'}
 										checked={props.settings.showThinking}
 										onChange={(checked) =>
 											props.onChange({ showThinking: checked })
@@ -2299,13 +2392,13 @@ export function SettingsModal(props: {
 											}
 										>
 											<option value="enter-send">
-												Enter 发送，Ctrl/Shift+Enter 换行
+												Enter 发送,Ctrl/Shift+Enter 换行
 											</option>
 											<option value="ctrl-enter-send">
-												Ctrl/⌘ + Enter 发送，Enter 换行
+												Ctrl/⌘ + Enter 发送,Enter 换行
 											</option>
 											<option value="shift-enter-send">
-												Shift + Enter 发送，Enter 换行
+												Shift + Enter 发送,Enter 换行
 											</option>
 										</select>
 									</div>
@@ -2330,7 +2423,7 @@ export function SettingsModal(props: {
 								>
 									<SettingSwitch
 										title="启用 pi agent 代理"
-										description="设置变更后，新建或重启 agent 才会生效"
+										description="设置变更后,新建或重启 agent 才会生效"
 										checked={props.settings.piProxyEnabled}
 										onChange={(checked) =>
 											props.onChange({ piProxyEnabled: checked })
@@ -2360,14 +2453,14 @@ export function SettingsModal(props: {
 													}
 												/>
 												<small className="setting-hint">
-													对应 NO_PROXY，多个条目用英文逗号分隔
+													对应 NO_PROXY,多个条目用英文逗号分隔
 												</small>
 											</div>
 											<div className="setting-row">
 												<div>
 													<strong>代理检测</strong>
 													<small>
-														检测代理是否能连通 OpenAI API，不校验 API Key
+														检测代理是否能连通 OpenAI API,不校验 API Key
 													</small>
 													{props.piProxyNotice && (
 														<small
@@ -2427,7 +2520,7 @@ export function SettingsModal(props: {
 													}
 												/>
 												<small className="setting-hint">
-													用于 Electron 网络栈，多个条目可用逗号或分号分隔
+													用于 Electron 网络栈,多个条目可用逗号或分号分隔
 												</small>
 											</div>
 										</div>
@@ -2448,10 +2541,52 @@ export function SettingsModal(props: {
 														: "未检测到 pi CLI"
 													: "检查 pi CLI 是否可用"}
 											</small>
+											{piPath && <small className="setting-path">当前路径：{piPath}</small>}
+											{props.piStatus && !props.piStatus.installed && props.piStatus.error && (
+												<small className="setting-status error setting-error-detail">
+													检测失败：{props.piStatus.error}
+												</small>
+											)}
 										</div>
 										<button onClick={props.onCheckPi} disabled={props.piChecking}>
-											{props.piChecking ? "检测中…" : "检测环境"}
+											{props.piChecking ? "检测中..." : "检测环境"}
 										</button>
+									</div>
+									<div className="setting-pi-path-panel">
+										<div className="setting-field">
+											<span>自定义 pi 路径</span>
+											<input
+												type="text"
+												value={props.customPiPath}
+												placeholder={piPath || "D:\\mise-data\\installs\\node\\24 13 0\\pi.cmd"}
+												onChange={(event) => props.onCustomPathChange(event.target.value)}
+												disabled={props.customPathValidating}
+											/>
+											<small className="setting-hint">
+												支持带引号、双反斜杠和无扩展名路径；保存前会自动归一化并校验。
+											</small>
+										</div>
+										<div className="setting-pi-path-actions">
+											<button
+												onClick={props.onValidateCustomPath}
+												disabled={!props.customPiPath.trim() || props.customPathValidating}
+											>
+												{props.customPathValidating ? "校验中..." : "校验并使用"}
+											</button>
+											<button
+												onClick={props.onClearCustomPath}
+												disabled={!props.settings.customPiPath || props.customPathValidating}
+											>
+												清除自定义路径
+											</button>
+										</div>
+										{props.customPathResult && (
+											<small className={`setting-status ${props.customPathResult.installed ? "success" : "error"}`}>
+												{props.customPathResult.installed
+													? `校验通过：${props.customPathResult.command ?? props.customPathResult.version ?? "pi"}`
+													: `校验失败：${props.customPathResult.error ?? "无法执行该路径"}`}
+											</small>
+										)}
 									</div>
 									<div className="setting-row">
 										<div>
@@ -2465,7 +2600,7 @@ export function SettingsModal(props: {
 									<div className="setting-row">
 										<div>
 											<strong>开发者控制台</strong>
-											<small>打开 DevTools 查看控制台日志，排查问题</small>
+											<small>打开 DevTools 查看控制台日志,排查问题</small>
 										</div>
 										<button onClick={props.onToggleDevTools}>
 											打开/关闭
@@ -2575,7 +2710,7 @@ export function CodexImportModal(props: {
 				{props.report && (
 					<div className="codex-import-report">
 						<strong>
-							导入完成：{props.report.imported} 成功，{props.report.failed} 失败
+							导入完成:{props.report.imported} 成功,{props.report.failed} 失败
 						</strong>
 						<div>
 							{props.report.results.map((result) => (
