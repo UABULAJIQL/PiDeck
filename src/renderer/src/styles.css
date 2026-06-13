@@ -162,21 +162,67 @@ button:disabled {
 /* ── 统一卡片容器：所有环境检测区块使用一致的外观 ── */
 .env-card {
 	padding: 14px 16px;
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #f8fafc;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
 .env-card > strong {
-	color: #3b424c;
-	font-size: 13px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
 }
 .env-card > small {
-	color: #65707d;
+	color: var(--color-text-secondary);
 	line-height: 1.55;
-	font-size: 12px;
+	font-size: var(--font-size-caption);
+}
+.env-stepper {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--space-2);
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
+}
+.env-step {
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
+}
+.env-step span {
+	width: 22px;
+	height: 22px;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-pill);
+	background: var(--color-bg-panel);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
+	font-weight: 700;
+}
+.env-step b {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+.env-step.done,
+.env-step.active {
+	color: var(--color-text-primary);
+}
+.env-step.done span,
+.env-step.active span {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
 }
 
 /* ── 加载状态卡片 ──────────────────────────────── */
@@ -185,7 +231,7 @@ button:disabled {
 	align-items: center;
 	gap: 10px;
 	padding: 18px 16px;
-	color: #65707d;
+	color: var(--color-text-secondary);
 }
 
 /* ── 成功状态卡片 ──────────────────────────────── */
@@ -193,16 +239,16 @@ button:disabled {
 	flex-direction: row;
 	align-items: flex-start;
 	gap: 14px;
-	border-color: #bfe8cf;
-	background: #f0fff5;
+	border-color: rgba(35, 134, 54, 0.24);
+	background: var(--color-accent-soft);
 }
 .env-success-icon {
 	flex-shrink: 0;
 	width: 32px;
 	height: 32px;
-	border-radius: 50%;
-	background: #2b8a3e;
-	color: #fff;
+	border-radius: var(--radius-pill);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -216,35 +262,35 @@ button:disabled {
 	min-width: 0;
 }
 .env-success-info strong {
-	color: #176b35;
-	font-size: 14px;
+	color: var(--color-accent);
+	font-size: var(--font-size-body);
 }
 .env-success-info span {
-	color: #2b8a3e;
-	font-size: 12px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-caption);
 	word-break: break-all;
 }
 .env-success-info small {
-	color: #629a74;
-	font-size: 12px;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-caption);
 }
 
 /* ── 错误详情卡片 ──────────────────────────────── */
 .env-error-card {
-	border-color: #ffc9c9;
-	background: #fff5f5;
+	border-color: rgba(180, 35, 24, 0.24);
+	background: var(--color-danger-soft);
 }
 .env-error-card strong {
-	color: #c92a2a;
+	color: var(--color-danger);
 }
 .env-error-pre {
 	margin: 4px 0 0;
 	padding: 10px 12px;
-	border-radius: 8px;
-	background: #fff;
-	border: 1px solid #ffc9c9;
-	color: #e03131;
-	font-size: 12px;
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	border: 1px solid rgba(180, 35, 24, 0.24);
+	color: var(--color-danger);
+	font-size: var(--font-size-caption);
 	font-family: "Cascadia Code", Consolas, monospace;
 	overflow-x: auto;
 	white-space: pre-wrap;
@@ -255,18 +301,19 @@ button:disabled {
 /* ── 通用卡片内按钮 ────────────────────────────── */
 .env-card-btn {
 	align-self: flex-start;
-	border: none;
-	border-radius: 8px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 7px 16px;
-	background: #f0f2f5;
-	color: #3b424c;
-	font-size: 12px;
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-caption);
 	cursor: pointer;
 	white-space: nowrap;
 }
 .env-card-btn.primary {
-	background: #4c6ef5;
-	color: #fff;
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
 }
 .env-card-btn:disabled {
 	opacity: 0.5;
@@ -280,8 +327,8 @@ button:disabled {
 	margin: 4px 0 0;
 	padding-left: 18px;
 	scrollbar-gutter: stable;
-	font-size: 12px;
-	color: #65707d;
+	font-size: var(--font-size-caption);
+	color: var(--color-text-secondary);
 }
 .env-dirs-list li {
 	margin: 3px 0;
@@ -299,23 +346,23 @@ button:disabled {
 	align-items: center;
 	gap: 8px;
 	padding: 6px 10px;
-	border-radius: 8px;
-	background: #eef0f3;
-	font-size: 12px;
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	font-size: var(--font-size-caption);
 }
 .ref-label {
 	flex-shrink: 0;
 	padding: 2px 6px;
-	border-radius: 4px;
-	background: #4c6ef5;
-	color: #fff;
-	font-size: 11px;
+	border-radius: var(--radius-xs);
+	background: var(--color-info);
+	color: var(--color-text-inverse);
+	font-size: var(--font-size-micro);
 	font-weight: 600;
 }
 .ref-command-item code {
 	flex: 1;
-	font-size: 12px;
-	color: #3b424c;
+	font-size: var(--font-size-caption);
+	color: var(--color-text-primary);
 	word-break: break-all;
 	user-select: all;
 }
@@ -328,30 +375,31 @@ button:disabled {
 .custom-path-input-row input {
 	flex: 1;
 	padding: 7px 10px;
-	border: 1px solid #d5dbe4;
-	border-radius: 8px;
-	font-size: 13px;
-	background: #fff;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	outline: none;
 }
 .custom-path-input-row input:focus {
-	border-color: #4c6ef5;
-	box-shadow: 0 0 0 2px rgba(76, 110, 245, 0.15);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 /* ── 校验结果提示 ──────────────────────────────── */
 .custom-path-result {
 	padding: 8px 12px;
-	border-radius: 8px;
-	font-size: 13px;
+	border-radius: var(--radius-sm);
+	font-size: var(--font-size-control);
 }
 .custom-path-result.success {
-	background: #e6f7e9;
-	color: #2b8a3e;
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
 }
 .custom-path-result.error {
-	background: #ffe3e3;
-	color: #c92a2a;
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
 }
 
 /* ── footer ────────────────────────────────────── */
@@ -361,12 +409,12 @@ button:disabled {
 	padding: 10px 24px 16px;
 }
 .environment-footer button {
-	border: 1px solid #b8d8ff;
-	border-radius: 10px;
-	background: #1677ff;
-	color: #fff;
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-sm);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
 	padding: 10px 16px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	cursor: pointer;
 }
 .environment-footer button:disabled {
@@ -469,7 +517,7 @@ button:disabled {
 	position: relative;
 	width: 34px;
 	height: 34px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	display: grid;
 	place-items: center;
 	/* 与应用图标保持一致：以 #14b814 作为品牌绿，深色端只用于保证桌面小尺寸下的可读性。 */
@@ -1420,7 +1468,7 @@ body.is-terminal-resizing {
 }
 .terminal-resize-handle:hover::before,
 body.is-terminal-resizing .terminal-resize-handle::before {
-	background: #22c55e;
+	background: var(--color-accent);
 }
 .terminal-dock-header {
 	display: flex;
@@ -1502,15 +1550,55 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 	gap: 4px;
 	flex: 0 0 auto;
 }
-.terminal-theme-select {
-	height: 24px;
+.terminal-more-menu {
+	position: relative;
+	display: grid;
+	place-items: center;
+}
+.terminal-theme-menu {
+	position: absolute;
+	right: 0;
+	bottom: calc(100% + 6px);
+	z-index: 8;
+	width: 190px;
+	display: grid;
+	gap: 4px;
+	padding: 8px;
 	border: 1px solid var(--terminal-border);
-	border-radius: 6px;
-	background: var(--terminal-bg);
+	border-radius: var(--radius-lg);
+	background: var(--terminal-panel);
 	color: var(--terminal-fg);
-	font-size: 12px;
-	padding: 0 7px;
-	max-width: 132px;
+	box-shadow: var(--shadow-popover);
+}
+.terminal-theme-menu strong,
+.terminal-theme-menu span {
+	padding: 0 4px;
+	line-height: 18px;
+}
+.terminal-theme-menu strong {
+	font-size: var(--font-size-caption);
+}
+.terminal-theme-menu span {
+	color: var(--terminal-muted);
+	font-size: var(--font-size-micro);
+}
+.terminal-theme-menu button {
+	width: 100%;
+	min-height: 28px;
+	height: auto;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--terminal-fg);
+	padding: 0 8px;
+	text-align: left;
+	font-size: var(--font-size-caption);
+}
+.terminal-theme-menu button:hover,
+.terminal-theme-menu button.active {
+	border-color: var(--terminal-border);
+	background: var(--terminal-active-bg);
+	color: var(--terminal-active-fg);
 }
 .terminal-icon-btn {
 	display: inline-grid;
@@ -2268,7 +2356,7 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 .empty-logo {
 	width: 74px;
 	height: 74px;
-	border-radius: 20px;
+	border-radius: var(--radius-lg);
 	display: grid;
 	place-items: center;
 	background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
@@ -2517,10 +2605,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	z-index: 120;
 	width: 240px;
 	padding: 6px;
-	border: 1px solid #dfe7ef;
-	border-radius: 12px;
-	background: #fff;
-	box-shadow: 0 18px 50px rgba(31, 35, 41, 0.16);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-popover);
 	animation: picker-check-in 0.16s ease-out;
 }
 .composer-footer .send-behavior-menu button,
@@ -2528,27 +2616,27 @@ body.is-composer-resizing .composer-resize-handle::after {
 	width: 100%;
 	min-width: 0;
 	padding: 9px 10px;
-	border-radius: 9px;
+	border-radius: var(--radius-sm);
 	background: transparent;
-	color: #334155;
+	color: var(--color-text-primary);
 	text-align: left;
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
 }
 .composer-footer .send-behavior-menu button:hover {
-	background: #f1fbf1;
+	background: var(--color-bg-active);
 }
 .composer-footer .send-behavior-menu strong {
-	font-size: 13px;
-	color: #1e293b;
+	font-size: var(--font-size-control);
+	color: var(--color-text-primary);
 }
 .composer-footer .send-behavior-menu span {
 	max-width: none;
 	overflow: visible;
 	white-space: normal;
-	font-size: 11px;
-	color: #64748b;
+	font-size: var(--font-size-micro);
+	color: var(--color-text-secondary);
 }
 .composer-footer .stop-send {
 	margin-left: auto;
@@ -2568,12 +2656,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	max-height: 380px;
 	display: flex;
 	flex-direction: column;
-	border: 1px solid #e2e5eb;
-	border-radius: 12px;
-	background: #fff;
-	box-shadow:
-		0 16px 70px rgba(0, 0, 0, 0.18),
-		0 2px 8px rgba(0, 0, 0, 0.08);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-popover);
 	z-index: 100;
 	animation: palette-in 0.12s ease-out;
 	overflow: hidden;
@@ -3248,9 +3334,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 .feedback-report-block {
 	display: grid;
 	gap: 10px;
-	border: 1px solid #e1e7ef;
-	border-radius: 12px;
-	background: #f8fafc;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 	padding: 12px;
 }
 .feedback-report-block > div {
@@ -3258,12 +3344,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	color: #334155;
-	font-size: 13px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
 }
 .feedback-report-block span {
-	color: #7b8794;
-	font-size: 12px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
 	font-weight: 400;
 }
 .feedback-report-block pre {
@@ -3272,7 +3358,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	overflow: auto;
 	white-space: pre-wrap;
 	word-break: break-word;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: #111827;
 	color: #d9f99d;
 	padding: 12px;
@@ -3285,8 +3371,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	justify-content: flex-end;
 	gap: 10px;
 	padding: 14px 18px 18px;
-	border-top: 1px solid #edf1f6;
-	background: #fbfcfe;
+	border-top: 1px solid var(--color-border-subtle);
+	background: var(--color-bg-sidebar);
 }
 .feedback-actions button {
 	height: 34px;
@@ -3561,21 +3647,21 @@ body.is-composer-resizing .composer-resize-handle::after {
 .outline-trigger {
 	width: 34px;
 	height: 34px;
-	border: 1px solid #e0e5ec;
-	background: rgba(255, 255, 255, 0.92);
-	color: #9aa2ad;
-	border-radius: 10px;
+	border: 1px solid var(--color-border-subtle);
+	background: var(--color-bg-panel);
+	color: var(--color-text-tertiary);
+	border-radius: var(--radius-lg);
 	padding: 0;
 	display: grid;
 	place-items: center;
 	font-size: 15px;
-	box-shadow: 0 8px 24px rgba(31, 35, 41, 0.08);
+	box-shadow: var(--shadow-popover);
 	cursor: ns-resize;
 	touch-action: none;
 }
 .outline-trigger:hover {
-	color: #14a514;
-	border-color: #b8dfb8;
+	color: var(--color-accent);
+	border-color: var(--color-accent);
 }
 .conversation-outline {
 	position: absolute;
@@ -4030,12 +4116,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 	overflow-y: auto;
 	flex: 1;
 	padding: 18px 20px 20px;
-	color: #3b424c;
+	color: var(--color-text-primary);
 }
 .settings-section {
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #fff;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
 	overflow: hidden;
 }
 .settings-section + .settings-section {
@@ -4045,17 +4131,17 @@ body.is-composer-resizing .composer-resize-handle::after {
 	display: grid;
 	gap: 3px;
 	padding: 14px 16px 12px;
-	border-bottom: 1px solid #edf1f5;
-	background: #fbfcfe;
+	border-bottom: 1px solid var(--color-border-subtle);
+	background: var(--color-bg-muted);
 }
 .settings-section-header strong {
-	color: #242b35;
-	font-size: 14px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-body);
 	font-weight: 600;
 }
 .settings-section-header small {
-	color: #7d8794;
-	font-size: 12px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
 }
 .settings-section-body {
 	padding: 6px 16px 12px;
@@ -4066,7 +4152,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 16px;
 	align-items: center;
 	min-height: 52px;
-	border-bottom: 1px solid #f0f3f6;
+	border-bottom: 1px solid var(--color-border-subtle);
 }
 .setting-switch-row:last-child {
 	border-bottom: 0;
@@ -4077,19 +4163,19 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 3px;
 }
 .setting-switch-row strong {
-	color: #2f3742;
-	font-size: 13px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
 	font-weight: 500;
 }
 .setting-switch-row small {
-	color: #7d8794;
-	font-size: 12px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
 	line-height: 1.4;
 }
 .setting-switch-row input[type="checkbox"] {
 	width: 16px;
 	height: 16px;
-	accent-color: #2f6fed;
+	accent-color: var(--color-accent);
 }
 .setting-field {
 	display: grid;
@@ -4097,21 +4183,21 @@ body.is-composer-resizing .composer-resize-handle::after {
 	margin: 12px 0;
 }
 .setting-field span {
-	color: #4c5664;
-	font-size: 13px;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-control);
 }
 .setting-field select,
 .setting-field input {
 	height: 36px;
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
-	background: #fff;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
 	padding: 0 10px;
-	color: #2b3038;
+	color: var(--color-text-primary);
 }
 .setting-field input:disabled {
-	background: #f6f8fb;
-	color: #98a2b3;
+	background: var(--color-bg-muted);
+	color: var(--color-text-tertiary);
 }
 .web-endpoint-panel {
 	margin-top: 10px;
@@ -4130,14 +4216,14 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-content: center;
 	gap: 5px;
 	padding: 0 12px;
-	border: 1px solid #d8dee8;
-	border-radius: 8px;
-	background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-border);
 }
 .web-endpoint-metric span {
-	color: #7a8494;
-	font-size: 10px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
 	font-weight: 800;
 	letter-spacing: 0.08em;
 }
@@ -4147,15 +4233,15 @@ body.is-composer-resizing .composer-resize-handle::after {
 	border: 0;
 	background: transparent;
 	padding: 0;
-	color: #1f2937;
+	color: var(--color-text-primary);
 	font: 700 15px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .web-endpoint-metric input:focus {
 	outline: none;
 }
 .web-endpoint-metric.editable:focus-within {
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.12);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 .web-endpoint-summary {
 	display: grid;
@@ -4163,25 +4249,25 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 10px;
 	align-items: center;
 	padding: 10px 12px;
-	border: 1px solid #e1e6ef;
-	border-radius: 8px;
-	background: #fbfcfe;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
 }
 .web-endpoint-summary > span {
 	width: 9px;
 	height: 9px;
-	border-radius: 999px;
-	background: #98a2b3;
-	box-shadow: 0 0 0 4px rgba(152, 162, 179, 0.14);
+	border-radius: var(--radius-pill);
+	background: var(--color-text-tertiary);
+	box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-text-tertiary) 18%, transparent);
 }
 .web-endpoint-summary > span.online {
-	background: #14a514;
-	box-shadow: 0 0 0 4px rgba(20, 165, 20, 0.13);
+	background: var(--color-accent);
+	box-shadow: 0 0 0 4px rgba(35, 134, 54, 0.14);
 }
 .web-endpoint-summary strong {
 	display: block;
-	color: #26313f;
-	font-size: 12px;
+	color: var(--color-text-primary);
+	font-size: var(--font-size-caption);
 	font-weight: 700;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -4190,22 +4276,22 @@ body.is-composer-resizing .composer-resize-handle::after {
 .web-endpoint-summary small {
 	display: block;
 	margin-top: 2px;
-	color: #7a8494;
-	font-size: 11px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
 }
 .web-endpoint-summary button {
 	height: 30px;
 	padding: 0 12px;
-	border: 1px solid #cfd7e3;
-	border-radius: 8px;
-	background: #fff;
-	color: #26313f;
-	font-size: 12px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-caption);
 	font-weight: 600;
 }
 .web-endpoint-summary button:disabled {
-	background: #f1f4f8;
-	color: #98a2b3;
+	background: var(--color-bg-muted);
+	color: var(--color-text-tertiary);
 }
 .setting-proxy-panel {
 	margin: 4px 0 8px;
@@ -4218,28 +4304,28 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	margin: 16px 0;
 	padding: 12px;
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #f8fafc;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 }
 .setting-row div {
 	display: grid;
 	gap: 4px;
 }
 .setting-row small {
-	color: #7d8794;
+	color: var(--color-text-tertiary);
 }
 .setting-status {
 	margin-top: 2px;
 }
 .setting-status.success {
-	color: #168a4a;
+	color: var(--color-accent);
 }
 .setting-status.error {
-	color: #d93025;
+	color: var(--color-danger);
 }
 .setting-status.info {
-	color: #667085;
+	color: var(--color-text-secondary);
 }
 .setting-path,
 .setting-error-detail {
@@ -4251,9 +4337,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 .setting-pi-path-panel {
 	margin: 4px 0 8px;
 	padding: 12px;
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #f8fafc;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 }
 .setting-pi-path-panel .setting-field {
 	margin-top: 0;
@@ -4593,8 +4679,25 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-btn.blue:hover:not(:disabled) {
-	background: #1d4ed8;
-	border-color: #1d4ed8;
+	background: var(--color-info);
+	border-color: var(--color-info);
+}
+
+.config-toolbar-actions,
+.config-model-list-actions,
+.config-test-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.config-test-controls {
+	flex: 1;
+}
+
+.config-test-controls input {
+	flex: 1;
 }
 
 :root[data-theme="dark"] .search-box,
@@ -4686,8 +4789,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	color: var(--color-text-inverse) !important;
 }
 .modal-header-actions .config-btn.blue:hover:not(:disabled) {
-	background: #1d4ed8 !important;
-	border-color: #1d4ed8 !important;
+	background: var(--color-info) !important;
+	border-color: var(--color-info) !important;
 }
 
 /* 配置弹窗关闭按钮 */
@@ -4744,16 +4847,18 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-add-provider-row input {
 	flex: 1;
 	height: 36px;
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 12px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 }
 
 .config-add-provider-row input:focus {
 	outline: none;
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-provider-list {
@@ -4775,8 +4880,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-provider-card.expanded {
 	/* 展开态使用轻量绿色强调，避免强描边抢走弹窗主体层级；允许自定义下拉菜单溢出显示。 */
-	border-color: #9bddab;
-	box-shadow: 0 8px 24px rgba(31, 35, 41, 0.06);
+	border-color: rgba(35, 134, 54, 0.32);
+	box-shadow: var(--shadow-border);
 	overflow: visible;
 }
 
@@ -4790,7 +4895,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-provider-header:hover {
-	background: #f8fafc;
+	background: var(--color-bg-hover);
 }
 
 .config-provider-info {
@@ -4803,22 +4908,22 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-provider-name {
 	font-weight: 600;
-	font-size: 14px;
-	color: #1f2329;
+	font-size: var(--font-size-body);
+	color: var(--color-text-primary);
 }
 
 .config-provider-badge {
-	font-size: 11px;
-	color: #7c3aed;
-	background: #f5f3ff;
+	font-size: var(--font-size-micro);
+	color: var(--color-accent);
+	background: var(--color-accent-soft);
 	padding: 2px 8px;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	font-weight: 500;
 }
 
 .config-provider-url {
-	font-size: 11px;
-	color: #7d8794;
+	font-size: var(--font-size-micro);
+	color: var(--color-text-tertiary);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -4832,15 +4937,15 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-chevron {
-	color: #b3bac4;
-	font-size: 13px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-control);
 	margin-left: 4px;
 }
 
 .config-provider-body {
-	border-top: 1px solid #edf0f2;
+	border-top: 1px solid var(--color-border-subtle);
 	padding-top: 12px;
-	background: linear-gradient(180deg, #fbfcfd 0%, #f7f9fb 100%);
+	background: var(--color-bg-muted);
 }
 
 .config-provider-form {
@@ -4849,9 +4954,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 	padding: 14px;
 	display: grid;
 	gap: 10px;
-	border: 1px solid #edf1f5;
-	border-radius: 12px;
-	background: rgba(255, 255, 255, 0.78);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
 }
 
 .config-advanced-preserved {
@@ -4859,10 +4964,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 4px;
 	margin: 4px 0 10px;
 	padding: 10px 12px;
-	border: 1px solid #dbeafe;
-	border-radius: 10px;
-	background: #eff6ff;
-	color: #1d4ed8;
+	border: 1px solid rgba(37, 99, 235, 0.18);
+	border-radius: var(--radius-md);
+	background: color-mix(in srgb, var(--color-info) 8%, var(--color-bg-panel));
+	color: var(--color-info);
 }
 .config-advanced-preserved strong {
 	font-size: 12px;
@@ -4874,7 +4979,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-advanced-preserved a,
 .config-model-advanced-note a,
 .config-diagnostic-card a {
-	color: #1677ff;
+	color: var(--color-info);
 	text-decoration: none;
 	font-weight: 600;
 }
@@ -4887,10 +4992,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	grid-column: 1 / -1;
 	margin-top: -4px;
 	padding: 6px 8px;
-	border-radius: 8px;
-	background: #f1f5f9;
-	color: #64748b;
-	font-size: 11px;
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-muted);
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-micro);
 	line-height: 1.45;
 }
 .config-diagnostic-card {
@@ -4898,10 +5003,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 10px;
 	margin-bottom: 14px;
 	padding: 14px;
-	border: 1px solid #fecaca;
-	border-radius: 12px;
-	background: #fff7f7;
-	color: #991b1b;
+	border: 1px solid rgba(180, 35, 24, 0.24);
+	border-radius: var(--radius-lg);
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
 }
 .config-diagnostic-card > div:first-child {
 	display: grid;
@@ -4917,10 +5022,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-diagnostic-card pre {
 	margin: 0;
 	padding: 10px 12px;
-	border: 1px solid #fecaca;
-	border-radius: 8px;
-	background: #fff;
-	color: #7f1d1d;
+	border: 1px solid rgba(180, 35, 24, 0.24);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-danger);
 	overflow: auto;
 	font-family: "Cascadia Code", Consolas, monospace;
 	font-size: 12px;
@@ -4938,8 +5043,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-form-row label {
-	font-size: 12px;
-	color: #5d6673;
+	font-size: var(--font-size-caption);
+	color: var(--color-text-secondary);
 	font-weight: 500;
 	text-align: right;
 	padding-right: 4px;
@@ -4952,12 +5057,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-form-row select {
 	min-width: 0;
 	height: 36px;
-	border: 1px solid #dbe2ea;
-	border-radius: 9px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 12px;
-	font-size: 13px;
-	background: #fff;
-	color: #2b3038;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	transition:
 		border-color 0.15s,
 		box-shadow 0.15s,
@@ -4969,8 +5074,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	appearance: none;
 	padding-right: 34px;
 	background-image:
-		linear-gradient(45deg, transparent 50%, #8a94a3 50%),
-		linear-gradient(135deg, #8a94a3 50%, transparent 50%);
+		linear-gradient(45deg, transparent 50%, var(--color-text-tertiary) 50%),
+		linear-gradient(135deg, var(--color-text-tertiary) 50%, transparent 50%);
 	background-position:
 		calc(100% - 18px) 15px,
 		calc(100% - 13px) 15px;
@@ -4983,9 +5088,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-form-row input:focus,
 .config-form-row select:focus {
 	outline: none;
-	border-color: #14a514;
-	background-color: #fff;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	background-color: var(--color-bg-panel);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-header-field {
@@ -5003,8 +5108,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-header-field span {
 	grid-column: 1 / -1;
-	color: #7a8491;
-	font-size: 11.5px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
 	line-height: 1.35;
 }
 
@@ -5025,20 +5130,20 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	border: 1px solid #dfe6ee;
-	border-radius: 8px;
-	background: #fff;
-	color: #2f3a46;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	padding: 0 10px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	text-align: left;
 	cursor: pointer;
 }
 
 .config-select-trigger:hover,
 .config-select-trigger:focus {
-	border-color: #b8dfb8;
-	box-shadow: 0 0 0 2px rgba(20, 184, 20, 0.08);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-select-trigger span {
@@ -5055,17 +5160,17 @@ body.is-composer-resizing .composer-resize-handle::after {
 	width: 34px;
 	height: 34px;
 	border: 0;
-	border-left: 1px solid #edf1f5;
-	border-radius: 0 8px 8px 0;
+	border-left: 1px solid var(--color-border-subtle);
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 	background: transparent;
-	color: #8a94a3;
+	color: var(--color-text-tertiary);
 	display: grid;
 	place-items: center;
 }
 
 .config-combobox-toggle:hover {
-	background: #f5f8fb;
-	color: #2f3a46;
+	background: var(--color-bg-hover);
+	color: var(--color-text-primary);
 }
 
 .config-combobox-menu {
@@ -5078,28 +5183,28 @@ body.is-composer-resizing .composer-resize-handle::after {
 	max-height: 220px;
 	overflow-y: auto;
 	padding: 5px;
-	border: 1px solid #dfe6ee;
-	border-radius: 10px;
-	background: #fff;
-	box-shadow: 0 12px 32px rgba(31, 35, 41, 0.14);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-popover);
 }
 
 .config-combobox-menu button {
 	width: 100%;
 	min-height: 30px;
 	border: 0;
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	background: transparent;
-	color: #2b3038;
+	color: var(--color-text-primary);
 	padding: 6px 9px;
 	text-align: left;
-	font-size: 12.5px;
+	font-size: var(--font-size-caption);
 }
 
 .config-combobox-menu button:hover,
 .config-combobox-menu button.active {
-	background: #f0fdf4;
-	color: #16a34a;
+	background: var(--color-bg-active);
+	color: var(--color-accent);
 }
 
 /* SecretInput 在 form-row 内占满右侧列 */
@@ -5117,11 +5222,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 	flex: 1;
 	min-width: 0;
 	height: 36px;
-	border: 1px solid #dbe2ea;
-	border-radius: 9px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 12px;
-	font-size: 13px;
-	background: #fff;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	font-family: "JetBrains Mono", "Fira Code", monospace;
 	transition:
 		border-color 0.15s,
@@ -5131,17 +5237,17 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-secret-input input:focus {
 	outline: none;
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-eye-btn {
 	width: 36px;
 	height: 36px;
-	border: 1px solid #dbe2ea;
-	border-radius: 9px;
-	background: #fff;
-	color: #64748b;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-secondary);
 	cursor: pointer;
 	font-size: 15px;
 	display: grid;
@@ -5150,42 +5256,42 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-eye-btn:hover {
-	background: #f5f8fb;
-	border-color: #c9d3df;
-	color: #2f3a46;
+	background: var(--color-bg-hover);
+	border-color: var(--color-border-strong);
+	color: var(--color-text-primary);
 }
 
 .config-copy-btn {
 	height: 36px;
 	padding: 0 10px;
-	border: 1px solid #dbe2ea;
-	border-radius: 9px;
-	background: #fff;
-	color: #5d6673;
-	font-size: 12px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-caption);
 	cursor: pointer;
 	transition: all 0.15s;
 	white-space: nowrap;
 }
 
 .config-copy-btn:hover {
-	background: #f5f8fb;
-	border-color: #c9d3df;
+	background: var(--color-bg-hover);
+	border-color: var(--color-border-strong);
 }
 
 .config-copy-btn.copied {
-	background: #f0fdf4;
-	border-color: #14a514;
-	color: #14a514;
+	background: var(--color-bg-active);
+	border-color: var(--color-accent);
+	color: var(--color-accent);
 }
 
 .config-models-section {
 	/* 模型列表是展开区的第二个业务分组，独立成面板以避免裸表格观感。 */
 	margin: 0 16px 16px;
 	padding: 14px;
-	border: 1px solid #edf1f5;
-	border-radius: 12px;
-	background: rgba(255, 255, 255, 0.72);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
 }
 
 .config-models-header {
@@ -5193,9 +5299,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 	justify-content: space-between;
 	align-items: center;
 	margin: 0 0 12px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	font-weight: 600;
-	color: #4b5563;
+	color: var(--color-text-primary);
 }
 
 .config-models-grid-header {
@@ -5205,11 +5311,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 8px;
 	align-items: center;
 	padding: 0 10px 6px;
-	font-size: 10.5px;
-	color: #8a94a3;
+	font-size: var(--font-size-micro);
+	color: var(--color-text-tertiary);
 	font-weight: 650;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+	letter-spacing: 0;
 }
 
 .config-models-grid-row {
@@ -5218,10 +5323,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 8px;
 	align-items: center;
 	padding: 8px 10px;
-	border: 1px solid #e8edf3;
-	border-radius: 10px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
 	margin-bottom: 7px;
-	background: rgba(255, 255, 255, 0.92);
+	background: var(--color-bg-panel);
 	transition:
 		border-color 0.15s,
 		box-shadow 0.15s,
@@ -5229,9 +5334,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-models-grid-row:hover {
-	border-color: #d8e1ea;
-	background: #fff;
-	box-shadow: 0 4px 12px rgba(31, 35, 41, 0.04);
+	border-color: var(--color-border-strong);
+	background: var(--color-bg-hover);
+	box-shadow: var(--shadow-border);
 }
 
 .config-models-grid-row input:not([type]),
@@ -5239,12 +5344,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-models-grid-row input[type="number"] {
 	min-width: 0;
 	height: 30px;
-	border: 1px solid #e1e7ef;
-	border-radius: 7px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 8px;
-	font-size: 12px;
-	background: #fbfcfd;
-	color: #26313d;
+	font-size: var(--font-size-caption);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	width: 100%;
 	transition:
 		border-color 0.15s,
@@ -5254,9 +5359,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-models-grid-row input:focus {
 	outline: none;
-	border-color: #14a514;
-	background: #fff;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.08);
+	border-color: var(--color-accent);
+	background: var(--color-bg-panel);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-checkbox-cell {
@@ -5267,7 +5372,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-checkbox-cell input[type="checkbox"] {
 	width: 16px;
 	height: 16px;
-	accent-color: #14a514;
+	accent-color: var(--color-accent);
 }
 
 .config-auth-list {
@@ -5289,8 +5394,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-auth-card.editing {
 	/* 与 Models provider 展开态保持一致，Auth 不再像裸表单直接贴在列表中。 */
-	border-color: #9bddab;
-	box-shadow: 0 8px 24px rgba(31, 35, 41, 0.06);
+	border-color: rgba(35, 134, 54, 0.32);
+	box-shadow: var(--shadow-border);
 }
 
 .config-auth-card-header {
@@ -5303,13 +5408,13 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-auth-card-header:hover {
-	background: #f8fafc;
+	background: var(--color-bg-hover);
 }
 
 .config-auth-provider {
 	font-weight: 600;
-	font-size: 14px;
-	color: #1f2329;
+	font-size: var(--font-size-body);
+	color: var(--color-text-primary);
 }
 
 .config-auth-key-preview {
@@ -5318,8 +5423,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 12px;
-	color: #7d8794;
+	font-size: var(--font-size-caption);
+	color: var(--color-text-tertiary);
 	font-family: "JetBrains Mono", "Fira Code", monospace;
 }
 
@@ -5334,37 +5439,37 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	gap: 14px;
 	padding: 12px 16px;
-	border: 1px solid #e5e9f0;
-	border-radius: 10px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
 	transition: border-color 0.15s;
 }
 
 .config-settings-row:hover {
-	border-color: #d7dce4;
+	border-color: var(--color-border-strong);
 }
 
 .config-settings-key {
 	min-width: 180px;
-	font-size: 13px;
-	color: #2b3038;
+	font-size: var(--font-size-control);
+	color: var(--color-text-primary);
 	font-weight: 500;
 }
 
 .config-settings-input {
 	flex: 1;
 	height: 36px;
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 12px;
-	font-size: 13px;
-	background: #fff;
-	color: #2b3038;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 }
 
 .config-settings-input:focus {
 	outline: none;
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-checkbox-label {
@@ -5372,15 +5477,15 @@ body.is-composer-resizing .composer-resize-handle::after {
 	flex-direction: row !important;
 	align-items: center;
 	gap: 6px !important;
-	font-size: 13px;
-	color: #3b424c;
+	font-size: var(--font-size-control);
+	color: var(--color-text-primary);
 	cursor: pointer;
 }
 
 .config-checkbox-label input[type="checkbox"] {
 	width: 16px;
 	height: 16px;
-	accent-color: #14a514;
+	accent-color: var(--color-accent);
 }
 
 /* 兼容性配置组：横向排列多个 checkbox */
@@ -5394,19 +5499,19 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-rename-input {
 	height: 30px;
 	min-width: 120px;
-	border: 1px solid #e1e7ef;
-	border-radius: 8px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 10px;
-	font-size: 14px;
+	font-size: var(--font-size-body);
 	font-weight: 600;
-	background: #fbfcfd;
-	color: #26313d;
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	transition: border-color 0.15s;
 }
 .config-rename-input:focus {
 	outline: none;
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 /* 模型下拉选择行 */
@@ -5415,9 +5520,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	gap: 8px;
 	padding: 10px 12px;
-	background: #f8fdf9;
-	border: 1px solid #c8efd8;
-	border-radius: 10px;
+	background: var(--color-bg-active);
+	border: 1px solid rgba(35, 134, 54, 0.24);
+	border-radius: var(--radius-lg);
 	margin-bottom: 10px;
 }
 
@@ -5429,12 +5534,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-model-dropdown-row .config-model-combobox input {
 	width: 100%;
 	height: 36px;
-	border: 1px solid #dbe2ea;
-	border-radius: 9px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 38px 0 12px;
-	font-size: 13px;
-	background: #fff;
-	color: #2b3038;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	cursor: pointer;
 	transition:
 		border-color 0.15s,
@@ -5444,9 +5549,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-model-dropdown-row .config-model-combobox input:focus {
 	outline: none;
-	border-color: #14a514;
-	background-color: #fff;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	background-color: var(--color-bg-panel);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 .config-model-combobox-menu button {
@@ -5456,8 +5561,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-model-combobox-menu small {
-	color: #7a8491;
-	font-size: 11px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
 	line-height: 1.2;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -5466,25 +5571,25 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-model-combobox-menu button:hover small,
 .config-model-combobox-menu button.active small {
-	color: #16a34a;
+	color: var(--color-accent);
 }
 
 /* 测试连接结果面板 */
 .config-test-result {
 	margin: 8px 0 0 0;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 	border: 1px solid;
 }
 
 .config-test-result.success {
-	border-color: #b7ebc8;
-	background: #f4fdf6;
+	border-color: rgba(35, 134, 54, 0.24);
+	background: var(--color-accent-soft);
 }
 
 .config-test-result.fail {
-	border-color: #fecaca;
-	background: #fef9f9;
+	border-color: rgba(180, 35, 24, 0.24);
+	background: var(--color-danger-soft);
 }
 
 .config-test-result-header {
@@ -5492,18 +5597,18 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	justify-content: space-between;
 	padding: 10px 14px;
-	font-size: 14px;
+	font-size: var(--font-size-body);
 	font-weight: 650;
 }
 
 .config-test-result.success .config-test-result-header {
-	color: #107c10;
-	border-bottom: 1px solid #c8efd8;
+	color: var(--color-accent);
+	border-bottom: 1px solid rgba(35, 134, 54, 0.24);
 }
 
 .config-test-result.fail .config-test-result-header {
-	color: #c42e2e;
-	border-bottom: 1px solid #f5d6d6;
+	color: var(--color-danger);
+	border-bottom: 1px solid rgba(180, 35, 24, 0.24);
 }
 
 .config-test-result-body {
@@ -5516,19 +5621,19 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-test-result-row {
 	display: flex;
 	gap: 16px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	align-items: baseline;
 }
 
 .config-test-result-row > span:first-child {
 	flex: 0 0 48px;
-	color: #6b7280;
-	font-size: 12px;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-caption);
 }
 
 .config-test-result-row strong,
 .config-test-result-row > span:last-child {
-	color: #1f2329;
+	color: var(--color-text-primary);
 	word-break: break-all;
 }
 
@@ -5537,7 +5642,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-test-result-error-row strong {
-	color: #b42323;
+	color: var(--color-danger);
 	line-height: 1.5;
 	word-break: break-all;
 }
@@ -5545,49 +5650,50 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-test-request-url,
 .config-test-request-body {
 	font-family: "JetBrains Mono", "Fira Code", monospace;
-	font-size: 11.5px;
-	background: #f0f2f5;
+	font-size: var(--font-size-caption);
+	background: var(--color-bg-muted);
 	padding: 3px 8px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	word-break: break-all;
-	color: #3b4252;
+	color: var(--color-text-primary);
 	line-height: 1.6;
 }
 
 .config-raw-tab select {
 	height: 36px;
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
 	padding: 0 12px;
-	font-size: 13px;
-	background: #fff;
+	font-size: var(--font-size-control);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	cursor: pointer;
 }
 
 .config-raw-tab select:focus {
 	outline: none;
-	border-color: #14a514;
+	border-color: var(--color-accent);
 }
 
 .config-raw-editor {
 	width: 100%;
 	min-height: 380px;
-	border: 1px solid #d7dce4;
-	border-radius: 10px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
 	padding: 16px;
 	font-family: "JetBrains Mono", "Fira Code", monospace;
-	font-size: 12.5px;
+	font-size: var(--font-size-caption);
 	line-height: 1.65;
-	color: #2b3038;
-	background: #fafbfc;
+	color: var(--color-text-primary);
+	background: var(--color-bg-panel);
 	resize: vertical;
 	tab-size: 2;
 }
 
 .config-raw-editor:focus {
 	outline: none;
-	border-color: #14a514;
-	box-shadow: 0 0 0 2px rgba(20, 165, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 
 /* ── 图片预览区域 ──────────────────────────────────────── */
@@ -5599,9 +5705,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 	min-width: 0;
 	min-height: 0;
 	padding: 8px 10px;
-	border: 1px solid #dfe4ea;
-	border-radius: 10px;
-	background: #f6f8fa;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 	max-height: 96px;
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -5611,9 +5717,9 @@ body.is-composer-resizing .composer-resize-handle::after {
 	position: relative;
 	width: 64px;
 	height: 64px;
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	overflow: hidden;
-	border: 1px solid #d7dce4;
+	border: 1px solid var(--color-border-subtle);
 }
 
 .image-preview-item img {
@@ -5702,7 +5808,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	max-width: 92vw;
 	max-height: 88vh;
 	object-fit: contain;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
 }
 
@@ -5737,7 +5843,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	display: flex;
 	flex-direction: column;
 	background: #1a1e26;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 }
 .rpc-log-modal .modal-header {
@@ -6070,40 +6176,40 @@ body.is-composer-resizing .composer-resize-handle::after {
 .update-version-line,
 .update-asset-line {
 	margin: 0 0 10px;
-	color: #475569;
-	font-size: 13px;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-control);
 }
 
 .update-asset-line {
 	padding: 8px 10px;
-	border-radius: 8px;
-	background: #f1f5f9;
-	color: #334155;
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-muted);
+	color: var(--color-text-primary);
 }
 
 .update-asset-line span {
 	word-break: break-all;
-	color: #1677ff;
+	color: var(--color-info);
 }
 
 .update-error-detail {
 	margin: 10px 0;
 	padding: 8px 10px;
-	border-radius: 8px;
-	background: #fff7ed;
-	color: #9a3412;
-	font-size: 12px;
+	border-radius: var(--radius-sm);
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
+	font-size: var(--font-size-caption);
 	line-height: 1.45;
 	word-break: break-word;
 }
 
 .update-notes {
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	line-height: 1.55;
-	color: #263244;
-	border: 1px solid #e5edf5;
-	border-radius: 10px;
-	background: #fbfdff;
+	color: var(--color-text-primary);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
 	padding: 12px;
 }
 
@@ -6127,15 +6233,15 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .update-notes code {
 	padding: 1px 4px;
-	border-radius: 4px;
-	background: #eef3f8;
+	border-radius: var(--radius-xs);
+	background: var(--color-bg-muted);
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .update-notes pre {
 	overflow: auto;
 	padding: 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	background: #0f172a;
 	color: #e2e8f0;
 }
@@ -6147,7 +6253,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .update-notes a {
-	color: #1677ff;
+	color: var(--color-info);
 }
 
 .update-actions {
@@ -6155,24 +6261,24 @@ body.is-composer-resizing .composer-resize-handle::after {
 	justify-content: flex-end;
 	gap: 10px;
 	padding: 12px 16px 14px;
-	border-top: 1px solid #edf2f7;
-	background: #f8fafc;
+	border-top: 1px solid var(--color-border-subtle);
+	background: var(--color-bg-sidebar);
 }
 
 .update-actions button {
-	border: 1px solid #d5dde7;
-	border-radius: 9px;
-	background: #fff;
-	color: #334155;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	padding: 8px 12px;
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	cursor: pointer;
 }
 
 .update-actions button.primary {
-	border-color: #22c55e;
-	background: #22c55e;
-	color: #fff;
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
 }
 
 .update-actions button:disabled {
@@ -6190,8 +6296,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 4px;
 }
 .skills-restart-hint {
-	color: #7d8794;
-	font-size: 12px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
 }
 .skills-toolbar-actions {
 	display: flex;
@@ -6201,12 +6307,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 	display: grid;
 	gap: 12px;
 	padding: 14px;
-	border: 1px solid #e5eaf1;
-	border-radius: 12px;
-	background: #f8fafc;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-muted);
 }
 .skill-create-card > strong {
-	color: #2b3038;
+	color: var(--color-text-primary);
 }
 .skill-create-grid {
 	display: grid;
@@ -6216,17 +6322,17 @@ body.is-composer-resizing .composer-resize-handle::after {
 .skill-create-card label {
 	display: grid;
 	gap: 6px;
-	color: #4c5664;
-	font-size: 13px;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-control);
 }
 .skill-create-card input,
 .skill-create-card select,
 .skill-create-card textarea {
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
-	background: #fff;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
 	padding: 8px 10px;
-	color: #2b3038;
+	color: var(--color-text-primary);
 }
 .skill-create-card textarea {
 	min-height: 72px;
@@ -6242,16 +6348,16 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	border: 1px solid #d7dce4;
-	border-radius: 8px;
-	background: #fff;
-	color: #2b3038;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
 	padding: 0 10px;
 	text-align: left;
 }
 .skill-location-picker > button.open {
-	border-color: #b8dfb8;
-	box-shadow: 0 0 0 2px rgba(20, 184, 20, 0.1);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
 }
 .skill-location-picker > button span {
 	overflow: hidden;
@@ -6259,8 +6365,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	white-space: nowrap;
 }
 .skill-location-picker > button b {
-	color: #8a94a6;
-	font-size: 13px;
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-control);
 }
 .skill-location-menu {
 	position: absolute;
@@ -6269,10 +6375,10 @@ body.is-composer-resizing .composer-resize-handle::after {
 	right: 0;
 	top: calc(100% + 6px);
 	padding: 6px;
-	border: 1px solid #dfe5ee;
-	border-radius: 12px;
-	background: #fff;
-	box-shadow: 0 14px 34px rgba(31, 35, 41, 0.16);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-popover);
 }
 .skill-location-menu button {
 	width: 100%;
@@ -6280,22 +6386,22 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 2px;
 	padding: 8px 10px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	text-align: left;
-	color: #2b3038;
+	color: var(--color-text-primary);
 }
 .skill-location-menu button:hover,
 .skill-location-menu button.active {
-	background: #ecfdf5;
+	background: var(--color-bg-active);
 }
 .skill-location-menu button strong {
-	font-size: 13px;
+	font-size: var(--font-size-control);
 	font-weight: 600;
 }
 .skill-location-menu button small {
-	font-size: 11px;
-	color: #8a94a6;
+	font-size: var(--font-size-micro);
+	color: var(--color-text-tertiary);
 	word-break: break-all;
 }
 .skill-create-card button {
@@ -6325,20 +6431,20 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 .skill-state {
 	padding: 2px 6px;
-	border-radius: 999px;
-	font-size: 11px;
+	border-radius: var(--radius-pill);
+	font-size: var(--font-size-micro);
 }
 .skill-state.enabled {
-	background: #e6f7e9;
-	color: #168a4a;
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
 }
 .skill-state.disabled {
-	background: #eef0f3;
-	color: #667085;
+	background: var(--color-bg-muted);
+	color: var(--color-text-secondary);
 }
 .skill-state.invalid {
-	background: #ffe3e3;
-	color: #d93025;
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
 }
 .skill-card small {
 	white-space: nowrap;
@@ -6347,8 +6453,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 .skill-warnings {
 	margin: 2px 0 0;
 	padding-left: 18px;
-	color: #d93025;
-	font-size: 12px;
+	color: var(--color-danger);
+	font-size: var(--font-size-caption);
 }
 .skill-card-actions {
 	align-items: center;

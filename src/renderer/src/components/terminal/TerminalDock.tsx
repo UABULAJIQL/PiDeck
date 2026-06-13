@@ -8,7 +8,7 @@ import {
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, MoreHorizontal, Plus, X } from "lucide-react";
 import type { PiDesktopApi } from "../../../../preload";
 import type { TerminalTab } from "../../../../shared/types";
 import { t } from "../../i18n";
@@ -86,6 +86,7 @@ export function TerminalDock(props: {
 	const [tabs, setTabs] = useState<TerminalTab[]>([]);
 	const [activeTabId, setActiveTabId] = useState("");
 	const [themeId, setThemeId] = useState<TerminalThemeId>("pi-soft");
+	const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 	const [confirmCloseAllOpen, setConfirmCloseAllOpen] = useState(false);
 	const [copyNotice, setCopyNotice] = useState(false);
 	const [loading, setLoading] = useState(false);
@@ -313,7 +314,7 @@ export function TerminalDock(props: {
 			<div
 				className="terminal-resize-handle"
 				onPointerDown={startResize}
-				title="拖动调整终端高度"
+				title={t("terminal.resize")}
 			/>
 			<header className="terminal-dock-header">
 				<div className="terminal-tabs">
@@ -356,20 +357,40 @@ export function TerminalDock(props: {
 					</button>
 				</div>
 				<div className="terminal-actions">
-					<select
-						className="terminal-theme-select"
-						value={themeId}
-						onChange={(event) =>
-							setThemeId(event.target.value as TerminalThemeId)
-						}
-						title={t("terminal.theme")}
+					<div
+						className="terminal-more-menu"
+						onBlur={() => window.setTimeout(() => setThemeMenuOpen(false), 80)}
 					>
-						{Object.entries(TERMINAL_THEMES).map(([id, item]) => (
-							<option key={id} value={id}>
-								{item.label}
-							</option>
-						))}
-					</select>
+						<button
+							className="terminal-icon-btn"
+							onMouseDown={(event) => {
+								event.preventDefault();
+								setThemeMenuOpen((open) => !open);
+							}}
+							title={t("terminal.more")}
+						>
+							<MoreHorizontal size={14} />
+						</button>
+						{themeMenuOpen && (
+							<div className="terminal-theme-menu">
+								<strong>{t("terminal.theme")}</strong>
+								<span>{t("terminal.themeCurrent")}: {theme.label}</span>
+								{Object.entries(TERMINAL_THEMES).map(([id, item]) => (
+									<button
+										key={id}
+										className={id === themeId ? "active" : ""}
+										onMouseDown={(event) => {
+											event.preventDefault();
+											setThemeId(id as TerminalThemeId);
+											setThemeMenuOpen(false);
+										}}
+									>
+										{item.label}
+									</button>
+								))}
+							</div>
+						)}
+					</div>
 					<button
 						className="terminal-icon-btn"
 						onClick={() => {

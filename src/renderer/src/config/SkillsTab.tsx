@@ -5,6 +5,7 @@ import type {
 	PiSkillLocation,
 	PiSkillSummary,
 } from "../../../shared/types";
+import { t } from "../i18n";
 
 export function SkillsTab(props: {
 	data: PiSkillListResult;
@@ -33,26 +34,28 @@ export function SkillsTab(props: {
 		<div className="skills-tab">
 			<div className="config-toolbar">
 				<div>
-					<span className="config-count">{data.skills.length} 个 Skill</span>
+					<span className="config-count">
+						{t("config.count.skills", { count: data.skills.length })}
+					</span>
 					<small className="skills-restart-hint">
-						修改后需要新建或重启 agent 才会生效
+						{t("config.restartHint")}
 					</small>
 				</div>
 				<div className="skills-toolbar-actions">
 					<button className="config-btn" onClick={props.onRefresh} disabled={props.loading}>
-						刷新
+						{t("common.refresh")}
 					</button>
 					<button className="config-btn blue" onClick={props.onOpenRoot}>
-						打开目录
+						{t("config.openFolder")}
 					</button>
 				</div>
 			</div>
 
 			<section className="skill-create-card">
-				<strong>新建 Skill</strong>
+				<strong>{t("config.createSkill")}</strong>
 				<div className="skill-create-grid">
 					<label>
-						<span>名称</span>
+						<span>{t("config.name")}</span>
 						<input
 							value={props.newName}
 							placeholder="my-skill"
@@ -60,7 +63,7 @@ export function SkillsTab(props: {
 						/>
 					</label>
 					<label>
-						<span>位置</span>
+						<span>{t("config.location")}</span>
 						<div
 							className="skill-location-picker"
 							onBlur={() => {
@@ -76,7 +79,7 @@ export function SkillsTab(props: {
 									setLocationPickerOpen((open) => !open);
 								}}
 							>
-								<span>{selectedLocation?.label ?? "选择目录"}</span>
+								<span>{selectedLocation?.label ?? t("config.chooseFolder")}</span>
 								<b>⌄</b>
 							</button>
 							{locationPickerOpen && (
@@ -103,7 +106,7 @@ export function SkillsTab(props: {
 					</label>
 				</div>
 				<label className="skill-description-field">
-					<span>描述</span>
+					<span>{t("config.description")}</span>
 					<textarea
 						value={props.newDescription}
 						placeholder="Use when..."
@@ -115,13 +118,13 @@ export function SkillsTab(props: {
 					onClick={props.onCreate}
 					disabled={!canCreate || props.creating}
 				>
-					{props.creating ? "创建中…" : "创建 Skill"}
+					{props.creating ? t("config.creatingSkill") : t("config.addSkill")}
 				</button>
 			</section>
 
 			<div className="skills-list">
 				{data.skills.length === 0 ? (
-					<div className="config-empty">暂无 Skill，可先创建一个全局 Skill。</div>
+					<div className="config-empty">{t("config.emptySkills")}</div>
 				) : (
 					data.skills.map((skill) => (
 						<SkillCard
@@ -153,12 +156,12 @@ function SkillCard(props: {
 						<strong>{skill.name}</strong>
 						<div className="skill-badges">
 							<span className={`skill-state ${skill.enabled ? "enabled" : "disabled"}`}>
-								{skill.enabled ? "启用" : "禁用"}
+								{skill.enabled ? t("common.enabled") : t("common.disabled")}
 							</span>
-							{!skill.valid && <span className="skill-state invalid">需修复</span>}
+							{!skill.valid && <span className="skill-state invalid">{t("config.needsFix")}</span>}
 						</div>
 					</div>
-					<small>{skill.description || "缺少 description，pi 不会加载该 skill。"}</small>
+					<small>{skill.description || t("config.skillDescriptionMissing")}</small>
 					<small>{skill.sourceLabel} · {skill.path}</small>
 					{skill.warnings.length > 0 && (
 						<ul className="skill-warnings">
@@ -170,10 +173,10 @@ function SkillCard(props: {
 				</div>
 				<div className="session-card-actions skill-card-actions">
 					<button className="session-rename-button" onClick={() => props.onToggle(skill, !skill.enabled)}>
-						{skill.enabled ? "禁用" : "启用"}
+						{skill.enabled ? t("common.disabled") : t("common.enabled")}
 					</button>
-					<button className="session-rename-button" onClick={() => props.onOpenFolder(skill)}>打开</button>
-					<button className="session-rename-button danger" onClick={() => props.onDelete(skill)}>删除</button>
+					<button className="session-rename-button" onClick={() => props.onOpenFolder(skill)}>{t("common.open")}</button>
+					<button className="session-rename-button danger" onClick={() => props.onDelete(skill)}>{t("common.delete")}</button>
 				</div>
 			</div>
 		</article>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { MouseEvent } from "react";
 import { Check, Eye, EyeOff, ChevronDown } from "lucide-react";
+import { t } from "../i18n";
 import { PROVIDER_API_OPTIONS } from "./providerHeaders";
 
 // ── 复制到剪贴板工具 ──────────────────────────────────
@@ -21,14 +22,14 @@ export function CopyButton(props: { text: string }) {
 		<button
 			className={`config-copy-btn ${copied ? "copied" : ""}`}
 			onClick={handleCopy}
-			title="复制"
+			title={t("common.copy")}
 		>
 			{copied ? (
 				<>
-					<Check size={14} /> 已复制
+					<Check size={14} /> {t("terminal.copied")}
 				</>
 			) : (
-				"复制"
+				t("common.copy")
 			)}
 		</button>
 	);
@@ -52,7 +53,7 @@ export function SecretInput(props: {
 			<button
 				className="config-eye-btn"
 				onClick={() => setVisible(!visible)}
-				title={visible ? "隐藏" : "显示"}
+				title={visible ? t("common.hide") : t("common.show")}
 			>
 				{visible ? <EyeOff size={15} /> : <Eye size={15} />}
 			</button>
@@ -135,7 +136,7 @@ export function ApiTypeInput(props: {
 					props.onChange(e.target.value);
 					setOpen(true);
 				}}
-				placeholder="选择或输入 API 类型"
+				placeholder={t("config.apiTypePlaceholder")}
 			/>
 			<button
 				type="button"
@@ -144,7 +145,7 @@ export function ApiTypeInput(props: {
 					e.preventDefault();
 					setOpen((current) => !current);
 				}}
-				title="展开 API 类型选项"
+				title={t("config.apiTypeExpand")}
 			>
 				<ChevronDown size={14} />
 			</button>

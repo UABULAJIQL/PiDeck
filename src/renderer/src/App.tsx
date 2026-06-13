@@ -2636,21 +2636,21 @@ export function App() {
           <div className="toolbar-actions sidebar-bottom-actions">
             <button
               className="icon-button feedback-icon"
-              title="问题反馈"
+              title={t("feedback.title")}
               onClick={() => setFeedbackOpen(true)}
             >
               <Info size={17} />
             </button>
             <button
               className="icon-button config-icon"
-              title="Pi管理"
+              title={t("config.title")}
               onClick={() => setConfigOpen(true)}
             >
               <Sliders size={17} />
             </button>
             <button
               className="icon-button settings-icon"
-              title="设置"
+              title={t("settings.title")}
               onClick={() => setSettingsOpen(true)}
             >
               <Settings size={17} />
@@ -3241,10 +3241,10 @@ export function App() {
                   setSessionRenameTarget(null);
                 }}
               >
-                取消
+                {t("common.cancel")}
               </button>
               <button type="submit" disabled={agentRenaming}>
-                {agentRenaming ? "保存中..." : "保存"}
+                {agentRenaming ? t("common.saving") : t("common.save")}
               </button>
             </div>
           </form>
@@ -3479,7 +3479,7 @@ function FeedbackModal({
     fallbackVersion: appInfo.version,
     environmentError: error,
   });
-  const issueUrl = `https://github.com/ayuayue/pi-desktop/issues/new?title=${encodeURIComponent("问题反馈：")}&body=${encodeURIComponent(report)}`;
+  const issueUrl = `https://github.com/ayuayue/pi-desktop/issues/new?title=${encodeURIComponent(t("feedback.issueTitle"))}&body=${encodeURIComponent(report)}`;
   const authorUrl = "https://github.com/ayuayue";
 
   async function copyReport() {
@@ -3495,9 +3495,9 @@ function FeedbackModal({
       >
         <div className="modal-header feedback-header">
           <div>
-            <strong>问题反馈</strong>
+            <strong>{t("feedback.title")}</strong>
             <small>
-              填写问题后，可复制内容或打开 GitHub Issue；也可发送邮件到{" "}
+              {t("feedback.intro")}{" "}
               <strong className="feedback-email">chat@caoayu.eu.org</strong>
             </small>
           </div>
@@ -3507,36 +3507,36 @@ function FeedbackModal({
         </div>
         <div className="feedback-body">
           <label>
-            <span>遇到的问题</span>
+            <span>{t("feedback.descriptionLabel")}</span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="例如：点击检测环境后提示未检测到 pi，但命令行里 pi --version 正常。"
+              placeholder={t("feedback.descriptionPlaceholder")}
             />
           </label>
           <label>
-            <span>复现步骤</span>
+            <span>{t("feedback.stepsLabel")}</span>
             <textarea
               value={steps}
               onChange={(event) => setSteps(event.target.value)}
-              placeholder="1. 打开应用\n2. 点击配置管理左侧的问题反馈\n3. ..."
+              placeholder={t("feedback.stepsPlaceholder")}
             />
           </label>
           <div className="feedback-report-block">
             <div>
-              <strong>将附带的环境信息</strong>
+              <strong>{t("feedback.reportTitle")}</strong>
               <span>
-                {loading ? "正在读取环境信息…" : "已生成，可在复制后自行删改。"}
+                {loading ? t("feedback.reportLoading") : t("feedback.reportReady")}
               </span>
             </div>
             <pre>{report}</pre>
           </div>
         </div>
         <div className="feedback-actions">
-          <button onClick={() => onOpenExternal(authorUrl)}>作者 GitHub</button>
-          <button onClick={copyReport}>复制反馈内容</button>
+          <button onClick={() => onOpenExternal(authorUrl)}>{t("feedback.authorGithub")}</button>
+          <button onClick={copyReport}>{t("feedback.copyReport")}</button>
           <button className="primary" onClick={() => onOpenExternal(issueUrl)}>
-            打开 GitHub Issue
+            {t("feedback.openIssue")}
           </button>
         </div>
       </section>
@@ -3555,28 +3555,38 @@ function buildFeedbackReport(input: {
   const pi = input.environment?.pi;
   const projectPath = input.project?.path
     ? maskHomePath(input.project.path)
-    : "未选择项目";
+    : t("feedback.report.projectNone");
   // 反馈报告刻意只展示脱敏路径和运行时版本，避免把用户 home 目录、API key 或会话内容默认发出去。
   return [
-    "## 问题描述",
-    input.description.trim() || "（请描述你遇到的问题）",
+    t("feedback.report.description"),
+    input.description.trim() || t("feedback.report.descriptionEmpty"),
     "",
-    "## 复现步骤",
-    input.steps.trim() || "（请写出尽量稳定的复现步骤）",
+    t("feedback.report.steps"),
+    input.steps.trim() || t("feedback.report.stepsEmpty"),
     "",
-    "## 环境信息",
-    `- pi-desktop: ${input.environment?.appVersion ?? input.fallbackVersion}`,
-    `- 系统: ${input.environment ? `${input.environment.platform} ${input.environment.arch}` : "读取失败"}`,
-    `- Electron: ${input.environment?.electronVersion ?? "-"}`,
-    `- Chrome: ${input.environment?.chromeVersion ?? "-"}`,
-    `- Node: ${input.environment?.nodeVersion ?? "-"}`,
-    `- 当前项目: ${projectPath}`,
-    `- pi 检测: ${pi ? (pi.installed ? "已检测到" : "未检测到") : "读取失败"}`,
-    `- pi 命令: ${pi?.command ? maskHomePath(pi.command) : "-"}`,
-    `- pi 版本: ${pi?.version || "-"}`,
-    ...(pi?.error ? [`- pi 错误: ${pi.error}`] : []),
+    t("feedback.report.environment"),
+    t("feedback.report.piDesktop", { value: input.environment?.appVersion ?? input.fallbackVersion }),
+    t("feedback.report.system", {
+      value: input.environment
+        ? `${input.environment.platform} ${input.environment.arch}`
+        : t("feedback.report.readFailed"),
+    }),
+    t("feedback.report.electron", { value: input.environment?.electronVersion ?? "-" }),
+    t("feedback.report.chrome", { value: input.environment?.chromeVersion ?? "-" }),
+    t("feedback.report.node", { value: input.environment?.nodeVersion ?? "-" }),
+    t("feedback.report.project", { value: projectPath }),
+    t("feedback.report.piStatus", {
+      value: pi
+        ? pi.installed
+          ? t("feedback.report.piDetected")
+          : t("feedback.report.piMissing")
+        : t("feedback.report.readFailed"),
+    }),
+    t("feedback.report.piCommand", { value: pi?.command ? maskHomePath(pi.command) : "-" }),
+    t("feedback.report.piVersion", { value: pi?.version || "-" }),
+    ...(pi?.error ? [t("feedback.report.piError", { value: pi.error })] : []),
     ...(input.environmentError
-      ? [`- 环境读取错误: ${input.environmentError}`]
+      ? [t("feedback.report.environmentError", { value: input.environmentError })]
       : []),
   ].join("\n");
 }
@@ -3598,34 +3608,38 @@ function UpdateModal(props: {
     <div className="modal-backdrop update-backdrop">
       <section className="update-modal">
         <div className="modal-header">
-          <strong>发现新版本 v{props.info.latestVersion}</strong>
+          <strong>{t("update.availableTitle", { version: props.info.latestVersion })}</strong>
           <button onClick={props.onClose}>×</button>
         </div>
         <div className="update-body">
           <p className="update-version-line">
-            当前版本 v{props.info.currentVersion}，最新版本 v
-            {props.info.latestVersion}
+            {t("update.currentLatest", {
+              current: props.info.currentVersion,
+              latest: props.info.latestVersion,
+            })}
           </p>
           {props.info.recommendedAsset && (
             <p className="update-asset-line">
-              推荐下载：{props.info.recommendedAsset.name}
+              {t("update.recommendedAsset", {
+                name: props.info.recommendedAsset.name,
+              })}
             </p>
           )}
           <div className="update-notes markdown-body">
             {/* GitHub Release notes 通常是 Markdown；这里复用聊天渲染链路支持标题、列表、链接和代码块。 */}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {props.info.releaseNotes.trim() || "该版本没有填写发布日志。"}
+              {props.info.releaseNotes.trim() || t("update.noReleaseNotes")}
             </ReactMarkdown>
           </div>
         </div>
         <div className="update-actions">
-          <button onClick={props.onOpenRelease}>打开 Release</button>
+          <button onClick={props.onOpenRelease}>{t("update.openRelease")}</button>
           <button
             className="primary"
             disabled={props.checking}
             onClick={props.onDownload}
           >
-            用浏览器下载
+            {t("update.browserDownload")}
           </button>
         </div>
       </section>
@@ -3643,25 +3657,26 @@ function UpdateErrorModal(props: {
     <div className="modal-backdrop update-backdrop">
       <section className="update-modal update-error-modal">
         <div className="modal-header">
-          <strong>检查更新失败</strong>
+          <strong>{t("update.checkFailedTitle")}</strong>
           <button onClick={props.onClose}>×</button>
         </div>
         <div className="update-body">
           <p className="update-version-line">
-            无法连接 GitHub Release。国内网络环境下 GitHub 可能不可达，
-            你可以稍后重试，或在设置的“代理设置”里配置桌面端代理后再次检查。
+            {t("update.checkFailedDescription")}
           </p>
-          <div className="update-error-detail">错误信息：{props.message}</div>
+          <div className="update-error-detail">
+            {t("update.errorInfo", { message: props.message })}
+          </div>
           <p className="update-asset-line">
-            也可以直接在浏览器打开 Release 页面手动查看和下载：
+            {t("update.manualReleaseHint")}
             <br />
             <span>{props.releasesUrl}</span>
           </p>
         </div>
         <div className="update-actions">
-          <button onClick={props.onClose}>关闭</button>
+          <button onClick={props.onClose}>{t("common.close")}</button>
           <button className="primary" onClick={props.onOpenRelease}>
-            打开 Release 页面
+            {t("update.openReleasePage")}
           </button>
         </div>
       </section>

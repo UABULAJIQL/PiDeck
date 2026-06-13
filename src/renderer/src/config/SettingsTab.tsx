@@ -1,4 +1,5 @@
 import type { SettingsFile } from "./configTypes";
+import { t } from "../i18n";
 
 // ── Settings Tab ────────────────────────────────────────
 
@@ -14,13 +15,15 @@ export function SettingsTab(props: {
 	return (
 		<div className="config-settings-tab">
 			<div className="config-toolbar">
-				<span className="config-count">{entries.length} 个配置项</span>
+				<span className="config-count">
+					{t("config.count.configItems", { count: entries.length })}
+				</span>
 				<button
 					className="config-btn primary"
 					onClick={props.onSave}
 					disabled={saving}
 				>
-					{saving ? "保存中…" : "保存"}
+					{saving ? t("common.saving") : t("common.save")}
 				</button>
 			</div>
 			<div className="config-settings-list">
@@ -33,7 +36,7 @@ export function SettingsTab(props: {
 						/>
 					</div>
 				))}
-				{entries.length === 0 && <div className="config-empty">暂无配置</div>}
+				{entries.length === 0 && <div className="config-empty">{t("config.emptyConfig")}</div>}
 			</div>
 		</div>
 	);

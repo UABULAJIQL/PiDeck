@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { t } from "../i18n";
 import type { AuthFile } from "./configTypes";
 import { SecretInput } from "./ConfigShared";
 
@@ -25,21 +26,23 @@ export function AuthTab(props: {
 	return (
 		<div className="config-auth-tab">
 			<div className="config-toolbar">
-				<span className="config-count">{providers.length} 个 provider</span>
-				<div style={{ display: "flex", gap: 8 }}>
+				<span className="config-count">
+					{t("config.count.providers", { count: providers.length })}
+				</span>
+				<div className="config-toolbar-actions">
 					<button
 						className="config-btn"
 						onClick={props.onStartAddAuth}
 						disabled={saving}
 					>
-						+ Auth
+						{t("config.addAuth")}
 					</button>
 					<button
 						className="config-btn primary"
 						onClick={props.onSave}
 						disabled={saving}
 					>
-						{saving ? "保存中…" : "保存"}
+						{saving ? t("common.saving") : t("common.save")}
 					</button>
 				</div>
 			</div>
@@ -49,7 +52,7 @@ export function AuthTab(props: {
 					<input
 						value={props.newAuthName}
 						onChange={(e) => props.onChangeNewAuthName(e.target.value)}
-						placeholder="provider 名称，如 openai"
+						placeholder={t("config.providerNamePlaceholder")}
 						onKeyDown={(e) => e.key === "Enter" && props.onConfirmAddAuth()}
 						autoFocus
 					/>
@@ -58,10 +61,10 @@ export function AuthTab(props: {
 						onClick={props.onConfirmAddAuth}
 						disabled={!props.newAuthName.trim()}
 					>
-						确认
+						{t("common.confirm")}
 					</button>
 					<button className="config-btn" onClick={props.onCancelAddAuth}>
-						取消
+						{t("common.cancel")}
 					</button>
 				</div>
 			)}
@@ -83,7 +86,7 @@ export function AuthTab(props: {
 								<span className="config-auth-key-preview">
 									{auth.key
 										? `${auth.key.slice(0, 10)}••••••${auth.key.slice(-4)}`
-										: "未配置"}
+										: t("config.authKeyPreviewEmpty")}
 								</span>
 								<div className="config-provider-actions">
 									<button
@@ -92,7 +95,7 @@ export function AuthTab(props: {
 											e.stopPropagation();
 											props.onDeleteAuth(name);
 										}}
-										title="删除"
+										title={t("common.delete")}
 									>
 										<Trash2 size={14} />
 									</button>
@@ -108,7 +111,7 @@ export function AuthTab(props: {
 							{isExpanded && (
 								<div className="config-provider-form">
 									<div className="config-form-row">
-										<label>类型</label>
+										<label>{t("config.field.type")}</label>
 										<input
 											value={auth.type ?? "api_key"}
 											onChange={(e) =>
@@ -117,7 +120,7 @@ export function AuthTab(props: {
 										/>
 									</div>
 									<div className="config-form-row">
-										<label>API Key</label>
+										<label>{t("config.field.apiKey")}</label>
 										<SecretInput
 											value={auth.key ?? ""}
 											onChange={(v) => props.onUpdate(name, "key", v)}
@@ -129,7 +132,7 @@ export function AuthTab(props: {
 					);
 				})}
 				{providers.length === 0 && (
-					<div className="config-empty">暂无 Auth 配置</div>
+					<div className="config-empty">{t("config.authEmpty")}</div>
 				)}
 			</div>
 		</div>

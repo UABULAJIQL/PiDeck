@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { ConfigSelect } from "./ConfigShared";
 
 // ── Raw Tab ─────────────────────────────────────────────
@@ -29,7 +30,7 @@ export function RawTab(props: {
 					onClick={props.onSave}
 					disabled={props.saving}
 				>
-					{props.saving ? "保存中…" : "保存"}
+					{props.saving ? t("common.saving") : t("common.save")}
 				</button>
 			</div>
 			<textarea

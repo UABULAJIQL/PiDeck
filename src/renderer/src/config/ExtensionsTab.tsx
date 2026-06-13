@@ -1,4 +1,5 @@
 import type { PiExtensionListResult, PiExtensionSummary } from "../../../shared/types";
+import { t } from "../i18n";
 
 export function ExtensionsTab(props: {
 	data: PiExtensionListResult;
@@ -11,21 +12,25 @@ export function ExtensionsTab(props: {
 		<div className="extensions-tab">
 			<div className="config-toolbar">
 				<div>
-					<span className="config-count">{props.data.extensions.length} 个扩展</span>
+					<span className="config-count">
+						{t("config.count.extensions", {
+							count: props.data.extensions.length,
+						})}
+					</span>
 					<small className="skills-restart-hint">
-						卸载后需要新建或重启 agent 才会生效
+						{t("config.extensionRestartHint")}
 					</small>
 				</div>
 				<div className="skills-toolbar-actions">
 					<button className="config-btn" onClick={props.onRefresh} disabled={props.loading}>
-						刷新
+						{t("common.refresh")}
 					</button>
 				</div>
 			</div>
 
 			<div className="skills-list">
 				{props.data.extensions.length === 0 ? (
-					<div className="config-empty">暂无已安装扩展。</div>
+					<div className="config-empty">{t("config.emptyExtensions")}</div>
 				) : (
 					props.data.extensions.map((extension) => (
 						<ExtensionCard
@@ -55,7 +60,11 @@ function ExtensionCard(props: {
 					<div className="session-card-title skill-title-row">
 						<strong>{name}</strong>
 						<div className="skill-badges">
-							<span className="skill-state enabled">{extension.scope === "project" ? "项目" : "全局"}</span>
+							<span className="skill-state enabled">
+								{extension.scope === "project"
+									? t("common.project")
+									: t("common.global")}
+							</span>
 						</div>
 					</div>
 					<small>{extension.source}</small>
@@ -67,7 +76,7 @@ function ExtensionCard(props: {
 						disabled={props.uninstalling}
 						onClick={() => props.onUninstall(extension)}
 					>
-						{props.uninstalling ? "卸载中..." : "卸载"}
+						{props.uninstalling ? t("config.uninstalling") : t("config.uninstall")}
 					</button>
 				</div>
 			</div>

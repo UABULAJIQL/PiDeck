@@ -69,24 +69,27 @@ function ConfigDiagnosticCard(props: {
 	return (
 		<div className="config-diagnostic-card">
 			<div>
-				<strong>{diagnostic.fileName} 加载失败</strong>
+				<strong>{t("config.diagnosticLoadFailed", { fileName: diagnostic.fileName })}</strong>
 				<span>
 					{diagnostic.line && diagnostic.column
-						? `第 ${diagnostic.line} 行，第 ${diagnostic.column} 列：${diagnostic.message}`
+						? t("config.diagnosticLocation", {
+								line: diagnostic.line,
+								column: diagnostic.column,
+								message: diagnostic.message,
+							})
 						: diagnostic.message}
 				</span>
 				<small>
-					已保留源文件内容，可切到“源文件”修复。复杂 provider/model 字段（如 compat、headers、thinkingLevelMap、modelOverrides）建议参考{" "}
+					{t("config.diagnosticHelp")}{" "}
 					<a href={diagnostic.docsUrl} target="_blank" rel="noreferrer">
-						pi 官方配置文档
+						{t("config.openOfficialDocs")}
 					</a>
-					。
 				</small>
 			</div>
 			{diagnostic.snippet && <pre>{diagnostic.snippet}</pre>}
 			<div className="config-diagnostic-actions">
-				<button className="config-btn primary" onClick={props.onOpenRaw}>打开源文件</button>
-				<button className="config-btn" onClick={props.onOpenDocs}>查看官方文档</button>
+				<button className="config-btn primary" onClick={props.onOpenRaw}>{t("config.openRawFile")}</button>
+				<button className="config-btn" onClick={props.onOpenDocs}>{t("config.openOfficialDocs")}</button>
 			</div>
 		</div>
 	);
@@ -702,10 +705,10 @@ function ConfigModalContent(props: ConfigModalProps) {
 						{section === "config" && (
 							<>
 								<button className="config-btn primary" onClick={handleExport}>
-									导出
+									{t("common.export")}
 								</button>
 								<button className="config-btn blue" onClick={handleImport}>
-									导入
+									{t("common.import")}
 								</button>
 							</>
 						)}
@@ -716,7 +719,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 				<div className="config-layout">
 					<aside className="config-sidebar" aria-label={t("config.title")}>
 						<div className="config-sidebar-group">
-							<span>{t("config.nav.config")}</span>
+							<span>{t("config.group.config")}</span>
 							{configNavItems.map((item) => (
 								<button
 									key={item.id}
@@ -733,7 +736,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 							))}
 						</div>
 						<div className="config-sidebar-group">
-							<span>Agent</span>
+							<span>{t("config.group.agent")}</span>
 							<button
 								className={section === "extensions" ? "active" : ""}
 								onClick={() => setSection("extensions")}
@@ -751,7 +754,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 
 					<main className="config-main">
 						<div className="config-content">
-					{loading && <div className="config-loading">加载中…</div>}
+					{loading && <div className="config-loading">{t("common.loading")}</div>}
 					{error && <div className="config-error">{error}</div>}
 					{section === "config" && configDiagnostic && (
 						<ConfigDiagnosticCard
@@ -896,15 +899,17 @@ function ConfigModalContent(props: ConfigModalProps) {
 				{deleteSkillConfirm && (
 					<div className="session-delete-confirm-backdrop" onClick={() => setDeleteSkillConfirm(null)}>
 						<div className="session-delete-confirm skill-delete-confirm" onClick={(event) => event.stopPropagation()}>
-							<strong>删除 Skill</strong>
+							<strong>{t("config.deleteSkillConfirmTitle")}</strong>
 							<p>
-								确认删除「{deleteSkillConfirm.name}」吗？此操作会删除本地 Skill 文件，且不可撤销。
+								{t("config.deleteSkillConfirmBody", {
+									name: deleteSkillConfirm.name,
+								})}
 							</p>
 							<small>{deleteSkillConfirm.path}</small>
 							<div className="session-delete-confirm-actions">
-								<button onClick={() => setDeleteSkillConfirm(null)}>取消</button>
+								<button onClick={() => setDeleteSkillConfirm(null)}>{t("common.cancel")}</button>
 								<button className="danger" onClick={() => void confirmDeleteSkill()}>
-									确认删除
+									{t("common.delete")}
 								</button>
 							</div>
 						</div>
@@ -914,14 +919,16 @@ function ConfigModalContent(props: ConfigModalProps) {
 				{uninstallExtensionConfirm && (
 					<div className="session-delete-confirm-backdrop" onClick={() => setUninstallExtensionConfirm(null)}>
 						<div className="session-delete-confirm skill-delete-confirm" onClick={(event) => event.stopPropagation()}>
-							<strong>卸载扩展</strong>
+							<strong>{t("config.uninstallExtensionTitle")}</strong>
 							<p>
-								确认卸载「{uninstallExtensionConfirm.source}」吗？这会执行 pi remove 并从 pi 配置中移除该扩展。
+								{t("config.uninstallExtensionBody", {
+									source: uninstallExtensionConfirm.source,
+								})}
 							</p>
 							{uninstallExtensionConfirm.path && <small>{uninstallExtensionConfirm.path}</small>}
 							<div className="session-delete-confirm-actions">
-								<button onClick={() => setUninstallExtensionConfirm(null)}>取消</button>
-								<button className="danger" onClick={confirmUninstallExtension}>卸载</button>
+								<button onClick={() => setUninstallExtensionConfirm(null)}>{t("common.cancel")}</button>
+								<button className="danger" onClick={confirmUninstallExtension}>{t("config.uninstall")}</button>
 							</div>
 						</div>
 					</div>

@@ -147,7 +147,7 @@ export type SendShortcutMode =
 	| "shift-enter-send";
 
 export type AppThemeMode = "system" | "light" | "dark";
-export type AppLanguageMode = "system" | "zh-CN" | "en-US";
+export type AppLanguageMode = "system" | "zh-CN" | "en-US" | "pseudo";
 
 export type AppSettings = {
 	useNativeTitleBar: boolean;
@@ -155,7 +155,7 @@ export type AppSettings = {
 	sendShortcut: SendShortcutMode;
 	/** 界面主题，system 跟随系统浅色/暗色偏好 */
 	theme: AppThemeMode;
-	/** 界面语言，system 跟随系统语言，当前支持中英文 */
+	/** 界面语言，system 跟随系统语言；pseudo 用于长文案布局压力测试 */
 	language: AppLanguageMode;
 	piEnvironmentChecked: boolean;
 	/** 关闭窗口时隐藏到系统托盘而不是退出 */

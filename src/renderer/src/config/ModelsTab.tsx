@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { t } from "../i18n";
 import type { ModelItem, ModelsFile } from "./configTypes";
 import { ApiTypeInput, ConfigSelect, SecretInput } from "./ConfigShared";
 import {
@@ -68,7 +69,7 @@ function FetchedModelCombobox(props: {
 				readOnly
 				value={displayValue}
 				onFocus={() => setOpen(true)}
-				placeholder="选择模型"
+				placeholder={t("config.modelSelectPlaceholder")}
 			/>
 			<button
 				type="button"
@@ -77,7 +78,7 @@ function FetchedModelCombobox(props: {
 					e.preventDefault();
 					setOpen((current) => !current);
 				}}
-				title="展开模型选项"
+				title={t("config.modelOptionExpand")}
 			>
 				<ChevronDown size={14} />
 			</button>
@@ -181,21 +182,23 @@ export function ModelsTab(props: {
 	return (
 		<div className="config-model-tab">
 			<div className="config-toolbar">
-				<span className="config-count">{providerNames.length} 个 provider</span>
-				<div style={{ display: "flex", gap: 8 }}>
+				<span className="config-count">
+					{t("config.count.providers", { count: providerNames.length })}
+				</span>
+				<div className="config-toolbar-actions">
 					<button
 						className="config-btn"
 						onClick={props.onStartAddProvider}
 						disabled={saving}
 					>
-						+ Provider
+						{t("config.addProvider")}
 					</button>
 					<button
 						className="config-btn primary"
 						onClick={props.onSave}
 						disabled={saving}
 					>
-						{saving ? "保存中…" : "保存"}
+						{saving ? t("common.saving") : t("common.save")}
 					</button>
 				</div>
 			</div>
@@ -205,7 +208,7 @@ export function ModelsTab(props: {
 					<input
 						value={props.newProviderName}
 						onChange={(e) => props.onChangeNewProviderName(e.target.value)}
-						placeholder="provider 名称，如 openai"
+						placeholder={t("config.providerNamePlaceholder")}
 						onKeyDown={(e) => e.key === "Enter" && props.onConfirmAddProvider()}
 						autoFocus
 					/>
@@ -214,10 +217,10 @@ export function ModelsTab(props: {
 						onClick={props.onConfirmAddProvider}
 						disabled={!props.newProviderName.trim()}
 					>
-						确认
+						{t("common.confirm")}
 					</button>
 					<button className="config-btn" onClick={props.onCancelAddProvider}>
-						取消
+						{t("common.cancel")}
 					</button>
 				</div>
 			)}
@@ -268,7 +271,9 @@ export function ModelsTab(props: {
 										<span className="config-provider-name">{name}</span>
 									)}
 									<span className="config-provider-badge">
-										{provider.models.length} 模型
+										{t("config.count.models", {
+											count: provider.models.length,
+										})}
 									</span>
 									{provider.baseUrl && (
 										<span className="config-provider-url">
@@ -285,7 +290,7 @@ export function ModelsTab(props: {
 													e.stopPropagation();
 													props.onConfirmRename(name);
 												}}
-												title="确认重命名"
+												title={t("config.renameConfirm")}
 											>
 												<Check size={14} />
 											</button>
@@ -295,7 +300,7 @@ export function ModelsTab(props: {
 													e.stopPropagation();
 													props.onCancelRename();
 												}}
-												title="取消重命名"
+												title={t("config.renameCancel")}
 											>
 												×
 											</button>
@@ -307,7 +312,7 @@ export function ModelsTab(props: {
 												e.stopPropagation();
 												props.onStartRename(name);
 											}}
-											title="重命名 provider"
+											title={t("config.renameProvider")}
 										>
 											✎
 										</button>
@@ -318,7 +323,7 @@ export function ModelsTab(props: {
 											e.stopPropagation();
 											props.onDeleteProvider(name);
 										}}
-										title="删除 provider"
+										title={t("config.deleteProvider")}
 									>
 										<Trash2 size={14} />
 									</button>
@@ -336,7 +341,7 @@ export function ModelsTab(props: {
 								<div className="config-provider-body">
 									<div className="config-provider-form">
 										<div className="config-form-row">
-											<label>Base URL</label>
+											<label>{t("config.field.baseUrl")}</label>
 											<input
 												value={provider.baseUrl ?? ""}
 												onChange={(e) =>
@@ -350,7 +355,7 @@ export function ModelsTab(props: {
 											/>
 										</div>
 										<div className="config-form-row">
-											<label>API 类型</label>
+											<label>{t("config.field.apiType")}</label>
 											<ApiTypeInput
 												value={provider.api ?? ""}
 												onChange={(value) =>
@@ -359,7 +364,7 @@ export function ModelsTab(props: {
 											/>
 										</div>
 										<div className="config-form-row">
-											<label>API Key</label>
+											<label>{t("config.field.apiKey")}</label>
 											<SecretInput
 												value={provider.apiKey ?? ""}
 												onChange={(v) =>
@@ -368,13 +373,13 @@ export function ModelsTab(props: {
 											/>
 										</div>
 										<div className="config-form-row">
-											<label>User-Agent</label>
+											<label>{t("config.field.userAgent")}</label>
 											<div className="config-header-field">
 												<ConfigSelect
 													value={userAgentSelectValue}
 													options={[
 														...USER_AGENT_OPTIONS,
-														{ value: CUSTOM_USER_AGENT_VALUE, label: "自定义" },
+														{ value: CUSTOM_USER_AGENT_VALUE, label: t("config.custom") },
 													]}
 													onChange={(value) => {
 														if (value === CUSTOM_USER_AGENT_VALUE) return;
@@ -402,25 +407,26 @@ export function ModelsTab(props: {
 															),
 														)
 													}
-													placeholder="留空则不写入"
+													placeholder={t("common.notConfigured")}
 												/>
-												<span>留空时不写入 headers，使用 pi / SDK 运行时默认值</span>
+												<span>{t("config.headerEmptyHint")}</span>
 											</div>
 										</div>
 										{(providerComplexFields.length > 0 || providerAdvancedFields.length > 0) && (
 											<div className="config-advanced-preserved">
-												<strong>高级字段已保留</strong>
+												<strong>{t("config.advancedPreservedTitle")}</strong>
 												<span>
-													{[...providerComplexFields, ...providerAdvancedFields].join(", ")}
-													{" "}不会被可视化表单丢弃；复杂结构请在“源文件”中编辑，并参考{" "}
+													{t("config.advancedPreservedProvider", {
+														fields: [...providerComplexFields, ...providerAdvancedFields].join(", "),
+													})}
+													{" "}
 													<a href="https://pi.dev/docs/latest/models" target="_blank" rel="noreferrer">
-														pi models 文档
+														pi {t("config.docsModels")}
 													</a>
 													{" / "}
 													<a href="https://pi.dev/docs/latest/custom-provider" target="_blank" rel="noreferrer">
-														custom provider 文档
+														{t("config.docsCustomProvider")}
 													</a>
-													。
 												</span>
 											</div>
 										)}
@@ -433,24 +439,23 @@ export function ModelsTab(props: {
 												disabled={props.fetchingProvider === name}
 											>
 												{props.fetchingProvider === name
-													? "获取中…"
-													: "获取模型列表"}
+													? t("config.fetchingModels")
+													: t("config.fetchModels")}
 											</button>
 										</div>
 
 										{/* 快速测试连接 */}
 										<div className="config-form-row">
-											<label>测试模型</label>
-											<div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
+											<label>{t("config.testModel")}</label>
+											<div className="config-test-controls">
 												<input
 													value={props.testModelIdByProvider[name] ?? ""}
 													onChange={(e) =>
 														props.onChangeTestModelId(name, e.target.value)
 													}
 													placeholder={
-														provider.models[0]?.id ?? "输入模型 ID 进行测试"
+														provider.models[0]?.id ?? t("config.testModelPlaceholder")
 													}
-													style={{ flex: 1 }}
 												/>
 												<button
 													className="config-btn primary"
@@ -458,8 +463,8 @@ export function ModelsTab(props: {
 													disabled={props.testingProvider === name}
 												>
 													{props.testingProvider === name
-														? "测试中…"
-														: "测试连接"}
+														? t("config.testingConnection")
+														: t("config.testConnection")}
 												</button>
 											</div>
 										</div>
@@ -473,13 +478,13 @@ export function ModelsTab(props: {
 													<div className="config-test-result-header">
 														<span>
 															{props.testResult.success
-																? "✅ 连接正常"
-																: "❌ 连接失败"}
+																? `✅ ${t("config.connectionOk")}`
+																: `❌ ${t("config.connectionFailed")}`}
 														</span>
 														<button
 															className="config-icon-btn"
 															onClick={props.onClearTestResult}
-															title="清除结果"
+															title={t("config.clearResult")}
 														>
 															×
 														</button>
@@ -487,16 +492,16 @@ export function ModelsTab(props: {
 													{props.testResult.success ? (
 														<div className="config-test-result-body">
 															<div className="config-test-result-row">
-																<span>模型</span>
+																<span>{t("config.model")}</span>
 																<strong>{props.testResult.model}</strong>
 															</div>
 															<div className="config-test-result-row">
-																<span>响应</span>
+																<span>{t("config.response")}</span>
 																<span>{props.testResult.snippet}</span>
 															</div>
 															{props.testResult.requestUrl && (
 																<div className="config-test-result-row">
-																	<span>请求</span>
+																	<span>{t("config.request")}</span>
 																	<code className="config-test-request-url">
 																		POST{" "}
 																		{props.testResult.requestUrl}
@@ -507,17 +512,21 @@ export function ModelsTab(props: {
 																(props.testResult.tokens.input != null ||
 																	props.testResult.tokens.output != null) && (
 																<div className="config-test-result-row">
-																	<span>Token</span>
+																	<span>{t("config.tokens")}</span>
 																	<span>
-																		输入 {props.testResult.tokens.input ?? "-"}
-																		，输出{" "}
-																		{props.testResult.tokens.output ?? "-"}
+																		{t("config.testInputTokens", {
+																			count: props.testResult.tokens.input ?? "-",
+																		})}
+																		，
+																		{t("config.testOutputTokens", {
+																			count: props.testResult.tokens.output ?? "-",
+																		})}
 																	</span>
 																</div>
 															)}
 															{props.testResult.latencyMs != null && (
 																<div className="config-test-result-row">
-																	<span>延迟</span>
+																	<span>{t("config.testLatency")}</span>
 																	<span>
 																		{props.testResult.latencyMs < 1000
 																			? `${props.testResult.latencyMs} ms`
@@ -531,12 +540,12 @@ export function ModelsTab(props: {
 															{/* 失败原因放在详情第一行，保证用户从折叠卡片展开后立刻看到核心错误，
 															   不会只看到请求/Body 等排障信息而误判测试结果。 */}
 															<div className="config-test-result-row config-test-result-error-row">
-																<span>原因</span>
+																<span>{t("config.reason")}</span>
 																<strong>{props.testResult.error}</strong>
 															</div>
 															{props.testResult.latencyMs != null && (
 																<div className="config-test-result-row">
-																	<span>耗时</span>
+																	<span>{t("config.testElapsed")}</span>
 																	<span>
 																		{props.testResult.latencyMs < 1000
 																			? `${props.testResult.latencyMs} ms`
@@ -546,7 +555,7 @@ export function ModelsTab(props: {
 															)}
 															{props.testResult.requestUrl && (
 																<div className="config-test-result-row">
-																	<span>请求</span>
+																	<span>{t("config.request")}</span>
 																	<code className="config-test-request-url">
 																		POST{" "}
 																		{props.testResult.requestUrl}
@@ -567,7 +576,7 @@ export function ModelsTab(props: {
 											)}
 
 										<div className="config-form-row">
-											<label>兼容性</label>
+											<label>{t("config.compatibility")}</label>
 											<div className="config-compat-group">
 												<label className="config-checkbox-label">
 													<input
@@ -579,7 +588,7 @@ export function ModelsTab(props: {
 															props.onChangeProvider(name, "compat", compat);
 														}}
 													/>
-													<span>developer 角色</span>
+													<span>{t("config.developerRole")}</span>
 												</label>
 												<label className="config-checkbox-label">
 													<input
@@ -591,7 +600,7 @@ export function ModelsTab(props: {
 															props.onChangeProvider(name, "compat", compat);
 														}}
 													/>
-													<span>推理强度</span>
+													<span>{t("config.reasoningEffort")}</span>
 												</label>
 											</div>
 										</div>
@@ -599,8 +608,8 @@ export function ModelsTab(props: {
 
 									<div className="config-models-section">
 										<div className="config-models-header">
-											<span>模型列表</span>
-											<div style={{ display: "flex", gap: 6 }}>
+											<span>{t("config.modelList")}</span>
+											<div className="config-model-list-actions">
 												{props.fetchedModels[name] &&
 												props.fetchedModels[name].length > 0 &&
 												addingModelDropdown !== name && (
@@ -611,7 +620,7 @@ export function ModelsTab(props: {
 															setAddingModelId("");
 														}}
 													>
-														+ 从列表选择
+														{t("config.addModelFromList")}
 													</button>
 												)}
 												<button
@@ -624,7 +633,7 @@ export function ModelsTab(props: {
 														props.onAddModel(name);
 													}}
 												>
-													+ 手动添加
+													{t("config.addModelManual")}
 												</button>
 											</div>
 										</div>
@@ -668,7 +677,7 @@ export function ModelsTab(props: {
 														}}
 														disabled={!addingModelId.trim()}
 													>
-														添加
+														{t("common.add")}
 													</button>
 													<button
 														className="config-btn small"
@@ -677,16 +686,16 @@ export function ModelsTab(props: {
 															setAddingModelId("");
 														}}
 													>
-														取消
+														{t("common.cancel")}
 													</button>
 												</div>
 											)}
 										<div className="config-models-grid-header">
-											<span>ID</span>
-											<span>名称</span>
+											<span>{t("config.modelId")}</span>
+											<span>{t("config.modelDisplayName")}</span>
 											<span>Context</span>
 											<span>MaxTokens</span>
-											<span>推理</span>
+											<span>{t("config.reasoning")}</span>
 											<span></span>
 										</div>
 										{provider.models.map((m, i) => {
@@ -718,7 +727,7 @@ export function ModelsTab(props: {
 													onChange={(e) =>
 														props.onUpdateModel(name, i, "name", e.target.value)
 													}
-													placeholder="显示名称"
+													placeholder={t("config.modelDisplayName")}
 												/>
 												<input
 													type="number"
@@ -769,15 +778,17 @@ export function ModelsTab(props: {
 												<button
 													className="config-icon-btn danger"
 													onClick={() => props.onDeleteModel(name, i)}
-													title="删除模型"
+													title={t("config.deleteModel")}
 												>
 													<Trash2 size={14} />
 												</button>
 												{(modelComplexFields.length > 0 || modelAdvancedFields.length > 0) && (
 													<div className="config-model-advanced-note">
-														高级字段已保留：{[...modelComplexFields, ...modelAdvancedFields].join(", ")}。
+														{t("config.advancedPreservedModel", {
+															fields: [...modelComplexFields, ...modelAdvancedFields].join(", "),
+														})}
 														<a href="https://pi.dev/docs/latest/models" target="_blank" rel="noreferrer">
-															查看 models 文档
+															{t("config.docsModels")}
 														</a>
 													</div>
 												)}
@@ -786,7 +797,7 @@ export function ModelsTab(props: {
 										})}
 										{provider.models.length === 0 && (
 											<div className="config-empty-sm">
-												暂无模型，点击「+ 模型」添加
+												{t("config.emptyModels")}
 											</div>
 										)}
 									</div>
@@ -796,7 +807,7 @@ export function ModelsTab(props: {
 					);
 				})}
 				{providerNames.length === 0 && (
-					<div className="config-empty">暂无 provider 配置</div>
+					<div className="config-empty">{t("config.emptyProviders")}</div>
 				)}
 			</div>
 		</div>

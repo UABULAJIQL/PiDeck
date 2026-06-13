@@ -71,6 +71,13 @@ export function EnvironmentDialog(props: {
 	const installed = props.status?.installed || props.customPathResult?.installed;
 	const searchedDirs = props.status?.searchedDirs.slice(0, 16) ?? [];
 	const errorText = props.status?.error ?? props.customPathResult?.error;
+	const steps = [
+		t("environment.stepCli"),
+		t("environment.stepPath"),
+		t("environment.stepPermission"),
+		t("environment.stepDone"),
+	];
+	const activeStep = props.checking ? 0 : installed ? 3 : 1;
 
 	// Windows 统一使用 CMD 查找 .cmd/.exe shim，不再引导用户使用 PowerShell 的 .ps1 入口。
 	const refCmd = 'where pi';
@@ -79,15 +86,27 @@ export function EnvironmentDialog(props: {
 		<div className="modal-backdrop environment-backdrop">
 			<section className="environment-modal">
 				<div className="modal-header">
-					<strong>pi 环境检测</strong>
+					<strong>{t("environment.title")}</strong>
 					<button onClick={props.onClose}>×</button>
 				</div>
 
 				<div className="environment-body">
+					<div className="env-stepper" aria-label={t("environment.title")}>
+						{steps.map((step, index) => (
+							<div
+								key={step}
+								className={`env-step ${index < activeStep ? "done" : ""} ${index === activeStep ? "active" : ""}`}
+							>
+								<span>{index < activeStep ? "✓" : index + 1}</span>
+								<b>{step}</b>
+							</div>
+						))}
+					</div>
+
 					{props.checking && (
 						<div className="env-card env-loading-card">
 							<div className="loader" />
-							<span>正在检测 pi CLI…</span>
+							<span>{t("environment.checking")}</span>
 						</div>
 					)}
 
@@ -95,16 +114,16 @@ export function EnvironmentDialog(props: {
 						<div className="env-card env-success-card">
 							<div className="env-success-icon">✓</div>
 							<div className="env-success-info">
-								<strong>检测通过</strong>
+								<strong>{t("environment.passed")}</strong>
 								<span>
-									路径：{(props.customPathResult || props.status)?.command}
+									{t("environment.path")}：{(props.customPathResult || props.status)?.command}
 								</span>
 								{(props.customPathResult || props.status)?.version && (
 									<span>
-										版本：{(props.customPathResult || props.status)!.version}
+										{t("environment.version")}：{(props.customPathResult || props.status)!.version}
 									</span>
 								)}
-								<small>窗口将在 3 秒后自动关闭。</small>
+								<small>{t("environment.autoClose")}</small>
 							</div>
 						</div>
 					)}
@@ -113,42 +132,34 @@ export function EnvironmentDialog(props: {
 						<>
 							{/* 状态说明卡片 */}
 							<div className="env-card env-status-card">
-								<strong>未检测到 pi CLI</strong>
-								<small>
-									桌面端通过系统 PATH 和常见包管理器路径自动查找 pi
-									命令。如果 pi 已安装但未被检测到，可以通过下方参考命令在终端中找到路径后手动指定。
-								</small>
+								<strong>{t("environment.notFoundTitle")}</strong>
+								<small>{t("environment.notFoundDesc")}</small>
 							</div>
 
 							{/* 自动检测错误信息（如有） */}
 							{errorText && (
 								<div className="env-card env-error-card">
-									<strong>检测错误详情</strong>
+									<strong>{t("environment.errorDetails")}</strong>
 									<pre className="env-error-pre">{errorText}</pre>
 								</div>
 							)}
 
 							{/* 安装指引卡片 */}
 							<div className="env-card env-guide-card">
-								<strong>还没安装 pi？</strong>
-								<small>
-									请按 pi 官方 quickstart 安装并配置 CLI，安装后重新打开应用或点击下方"重新检测"。
-								</small>
+								<strong>{t("environment.installTitle")}</strong>
+								<small>{t("environment.installDesc")}</small>
 								<button
 									className="env-card-btn"
 									onClick={props.onOpenInstallDocs}
 								>
-									打开安装文档
+									{t("environment.openInstallDocs")}
 								</button>
 							</div>
 
 							{/* 手动输入 pi 路径卡片 */}
 							<div className="env-card env-custom-card">
-								<strong>手动指定 pi 路径</strong>
-								<small>
-									如果 pi 已安装但桌面端检测不到（如使用了 nvm、pnpm
-									全局安装、或自定义 mise 数据目录），可运行下方 CMD 命令，将输出的 pi.cmd 或 pi.exe 路径粘贴到输入框中。
-								</small>
+								<strong>{t("environment.customPathTitle")}</strong>
+								<small>{t("environment.customPathDesc")}</small>
 								<div className="ref-commands">
 									<div className="ref-command-item">
 										<span className="ref-label">CMD</span>
@@ -175,8 +186,8 @@ export function EnvironmentDialog(props: {
 										}
 									>
 										{props.customPathValidating
-											? "校验中…"
-											: "校验并使用"}
+											? t("environment.validatingPath")
+											: t("environment.validatePath")}
 									</button>
 								</div>
 								{props.customPathResult && (
@@ -184,8 +195,8 @@ export function EnvironmentDialog(props: {
 										className={`custom-path-result ${props.customPathResult.installed ? "success" : "error"}`}
 									>
 										{props.customPathResult.installed
-											? `✓ 校验通过：${props.customPathResult.version ?? "pi"}`
-											: `✗ 校验失败：${props.customPathResult.error ?? "无法执行该路径"}`}
+											? `✓ ${t("environment.validatePassed", { value: props.customPathResult.version ?? "pi" })}`
+											: `✗ ${t("environment.validateFailed", { value: props.customPathResult.error ?? t("environment.unableToRun") })}`}
 									</div>
 								)}
 							</div>
@@ -193,8 +204,8 @@ export function EnvironmentDialog(props: {
 							{/* 检测路径卡片 */}
 							{searchedDirs.length > 0 && (
 								<div className="env-card env-dirs-card">
-									<strong>已搜索的目录</strong>
-									<small>桌面端自动检测时扫描了以下目录：</small>
+									<strong>{t("environment.searchedDirs")}</strong>
+									<small>{t("environment.searchedDirsDesc")}</small>
 									<ul className="env-dirs-list">
 										{searchedDirs.map((dir) => (
 											<li key={dir}>{dir}</li>
@@ -211,7 +222,7 @@ export function EnvironmentDialog(props: {
 						onClick={props.onRecheck}
 						disabled={props.checking || props.customPathValidating}
 					>
-						重新检测
+						{t("environment.recheck")}
 					</button>
 				</div>
 			</section>
@@ -2434,6 +2445,9 @@ export function SettingsModal(props: {
 											</option>
 											<option value="en-US">
 												{t("settings.languageEn")}
+											</option>
+											<option value="pseudo">
+												{t("settings.languagePseudo")}
 											</option>
 										</select>
 									</div>
