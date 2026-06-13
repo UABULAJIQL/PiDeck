@@ -27,6 +27,7 @@ export const ipcChannels = {
 	extensionsUninstall: "extensions:uninstall",
 	gitBranches: "git:branches",
 	gitCheckout: "git:checkout",
+	gitCreateBranch: "git:create-branch",
 	piCheck: "pi:check",
 	piCheckCustom: "pi:check-custom",
 	appInfo: "app:info",

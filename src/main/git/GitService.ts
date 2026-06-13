@@ -36,4 +36,13 @@ export class GitService {
 		await execFileAsync("git", ["checkout", branch], { cwd });
 		return this.getBranches(cwd);
 	}
+
+	/**
+	 * 基于当前分支创建新分支并切换。
+	 * 使用 checkout -b 命令在当前分支基础上创建新分支。
+	 */
+	async createBranch(cwd: string, branchName: string): Promise<GitBranchInfo> {
+		await execFileAsync("git", ["checkout", "-b", branchName], { cwd });
+		return this.getBranches(cwd);
+	}
 }

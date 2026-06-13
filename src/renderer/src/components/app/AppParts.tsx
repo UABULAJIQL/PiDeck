@@ -20,6 +20,7 @@ import {
 	Network,
 	Pencil,
 	Pin,
+	Plus,
 	RefreshCw,
 	Settings2,
 	UploadCloud,
@@ -455,8 +456,11 @@ export function BranchSelector(props: {
 	gitInfo: GitBranchInfo;
 	switchingBranch?: string | null;
 	onSwitch: (branch: string) => void;
+	onCreateBranch: (branchName: string) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const [creatingBranch, setCreatingBranch] = useState(false);
+	const [newBranchName, setNewBranchName] = useState("");
 	const ref = useRef<HTMLDivElement>(null);
 
 	// 点击外部区域自动关闭下拉
@@ -465,6 +469,8 @@ export function BranchSelector(props: {
 		const handler = (event: MouseEvent) => {
 			if (ref.current && !ref.current.contains(event.target as Node)) {
 				setOpen(false);
+				setCreatingBranch(false);
+				setNewBranchName("");
 			}
 		};
 		document.addEventListener("mousedown", handler);
@@ -476,6 +482,15 @@ export function BranchSelector(props: {
 
 	// 无分支信息时不渲染
 	if (!current && branches.length === 0) return null;
+
+	const handleCreateBranch = () => {
+		const trimmed = newBranchName.trim();
+		if (!trimmed) return;
+		props.onCreateBranch(trimmed);
+		setOpen(false);
+		setCreatingBranch(false);
+		setNewBranchName("");
+	};
 
 	return (
 		<div className="branch-select" ref={ref}>
@@ -529,6 +544,39 @@ export function BranchSelector(props: {
 						</button>
 					);
 					})}
+					{creatingBranch ? (
+						<div className="branch-create-form">
+							<input
+								type="text"
+								placeholder={t("app.branchNewPlaceholder")}
+								value={newBranchName}
+								onChange={(e) => setNewBranchName(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") handleCreateBranch();
+									if (e.key === "Escape") {
+										setCreatingBranch(false);
+										setNewBranchName("");
+									}
+								}}
+								autoFocus
+							/>
+							<button
+								className="branch-create-confirm"
+								disabled={!newBranchName.trim()}
+								onClick={handleCreateBranch}
+							>
+								<Check size={14} />
+							</button>
+						</div>
+					) : (
+						<button
+							className="branch-create-trigger"
+							onClick={() => setCreatingBranch(true)}
+						>
+							<Plus size={14} />
+							<span>{t("app.branchCreate")}</span>
+						</button>
+					)}
 				</div>
 			)}
 		</div>
@@ -2259,10 +2307,10 @@ export function FileContextMenu(props: {
 export function ProjectContextMenu(props: {
 	menu: { x: number; y: number; project: Project };
 	onClose: () => void;
+	onRevealProject: () => void;
 	onImportCodexSessions: () => void;
 	onRemoveProject: () => void;
 }) {
-	const isChatProject = props.menu.project.kind === "chat";
 	return (
 		<div className="context-backdrop" onClick={props.onClose}>
 			<div
@@ -2270,14 +2318,11 @@ export function ProjectContextMenu(props: {
 				style={{ left: props.menu.x, top: props.menu.y }}
 				onClick={(event) => event.stopPropagation()}
 			>
-				{!isChatProject && (
-					<>
-						<button onClick={props.onImportCodexSessions}>
-							{t("menu.importCodex")}
-						</button>
-						<button onClick={props.onRemoveProject}>{t("menu.removeProject")}</button>
-					</>
-				)}
+				<button onClick={props.onRevealProject}>{t("menu.revealProject")}</button>
+				<button onClick={props.onImportCodexSessions}>
+					{t("menu.importCodex")}
+				</button>
+				<button onClick={props.onRemoveProject}>{t("menu.removeProject")}</button>
 			</div>
 		</div>
 	);
@@ -2287,7 +2332,6 @@ export function AgentContextMenu(props: {
 	menu: { x: number; y: number; agent: AgentTab };
 	actionLoading?: "copy" | "export" | null;
 	onClose: () => void;
-	onActivate: () => void;
 	onRename: () => void;
 	onExport: () => void;
 	onCopySession: () => void;
@@ -2301,7 +2345,6 @@ export function AgentContextMenu(props: {
 				style={{ left: props.menu.x, top: props.menu.y }}
 				onClick={(event) => event.stopPropagation()}
 			>
-				<button disabled={Boolean(props.actionLoading)} onClick={props.onActivate}>{t("menu.openSession")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onRename}>{t("common.rename")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onCopySession}>
 					{props.actionLoading === "copy" && <span className="mini-loader" />}
@@ -2312,7 +2355,7 @@ export function AgentContextMenu(props: {
 					{props.actionLoading === "export" ? t("menu.exporting") : t("menu.exportHtml")}
 				</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onShowLogs}>{t("menu.rpcLogs")}</button>
-				<button onClick={props.onCloseAgent}>{t("menu.closeAgent")}</button>
+				<button className="danger" onClick={props.onCloseAgent}>{t("menu.closeAgent")}</button>
 			</div>
 		</div>
 	);
@@ -2322,11 +2365,11 @@ export function SessionContextMenu(props: {
 	menu: { x: number; y: number; session: SessionSummary };
 	actionLoading?: "copy" | "export" | null;
 	onClose: () => void;
-	onActivate: () => void;
 	onRename: () => void;
 	onExport: () => void;
 	onCopySession: () => void;
 	onShowLogs: () => void;
+	onDeleteSession: () => void;
 }) {
 	return (
 		<div className="context-backdrop" onClick={props.onClose}>
@@ -2335,7 +2378,6 @@ export function SessionContextMenu(props: {
 				style={{ left: props.menu.x, top: props.menu.y }}
 				onClick={(event) => event.stopPropagation()}
 			>
-				<button disabled={Boolean(props.actionLoading)} onClick={props.onActivate}>{t("menu.openSession")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onRename}>{t("common.rename")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onCopySession}>
 					{props.actionLoading === "copy" && <span className="mini-loader" />}
@@ -2346,6 +2388,13 @@ export function SessionContextMenu(props: {
 					{props.actionLoading === "export" ? t("menu.exporting") : t("menu.exportHtml")}
 				</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onShowLogs}>{t("menu.rpcLogs")}</button>
+				<button
+					className="danger"
+					disabled={Boolean(props.actionLoading)}
+					onClick={props.onDeleteSession}
+				>
+					{t("common.delete")}
+				</button>
 			</div>
 		</div>
 	);

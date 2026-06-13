@@ -199,6 +199,10 @@ export function createPreviewApi(): PiDesktopApi {
 				current: branch,
 				branches: ["main", "dev"],
 			}),
+			createBranch: async (_projectId, branchName) => ({
+				current: branchName,
+				branches: ["main", "dev", branchName],
+			}),
 		},
 		pi: {
 			check: async () => ({

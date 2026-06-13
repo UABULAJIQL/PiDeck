@@ -101,6 +101,7 @@ export class CodexSessionImporter {
 				? "current"
 				: "outdated";
 
+		const originalTimestamp = Date.parse(String(session.meta.timestamp ?? "")) || session.sourceMtime;
 		return {
 			id: String(session.meta.id ?? session.sourcePath),
 			sourcePath: session.sourcePath,
@@ -108,8 +109,8 @@ export class CodexSessionImporter {
 			cwd: String(session.meta.cwd ?? ""),
 			title: converted.title,
 			preview: converted.preview,
-			createdAt: Date.parse(String(session.meta.timestamp ?? "")) || session.sourceMtime,
-			updatedAt: session.sourceMtime,
+			createdAt: originalTimestamp,
+			updatedAt: originalTimestamp,
 			messageCount: converted.messageCount,
 			status,
 			sourceSize: session.sourceSize,

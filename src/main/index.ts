@@ -353,6 +353,15 @@ function registerIpc() {
 		},
 	);
 
+	ipcMain.handle(
+		ipcChannels.gitCreateBranch,
+		async (_event, projectId: string, branchName: string) => {
+			const project = projectStore.get(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			return gitService.createBranch(project.path, branchName);
+		},
+	);
+
 	ipcMain.handle(ipcChannels.piCheck, () => {
 		// 用户手动指定的路径优先于自动检测
 		const settings = settingsStore.get();

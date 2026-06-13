@@ -22,6 +22,12 @@ const TERMINAL_THEMES = {
 			cursor: "#16a34a",
 			selectionBackground: "#bbf7d0",
 		},
+		xtermDark: {
+			background: "#15191d",
+			foreground: "#d9e2dc",
+			cursor: "#35c45a",
+			selectionBackground: "#1f3f2b",
+		},
 	},
 	"solarized-light": {
 		label: "Solarized Light",
@@ -90,9 +96,28 @@ export function TerminalDock(props: {
 	const [confirmCloseAllOpen, setConfirmCloseAllOpen] = useState(false);
 	const [copyNotice, setCopyNotice] = useState(false);
 	const [loading, setLoading] = useState(false);
+	const [appTheme, setAppTheme] = useState(
+		() => document.documentElement.dataset.theme ?? "light",
+	);
 	const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 	const theme = TERMINAL_THEMES[themeId];
+	const xtermTheme =
+		themeId === "pi-soft" && appTheme === "dark" && "xtermDark" in theme
+			? theme.xtermDark
+			: theme.xterm;
 	const { collapsed } = props;
+
+	useEffect(() => {
+		const root = document.documentElement;
+		const observer = new MutationObserver(() => {
+			setAppTheme(root.dataset.theme ?? "light");
+		});
+		observer.observe(root, {
+			attributes: true,
+			attributeFilter: ["data-theme"],
+		});
+		return () => observer.disconnect();
+	}, []);
 
 	useEffect(() => {
 		activeTabIdRef.current = activeTab?.id ?? "";
@@ -162,7 +187,7 @@ export function TerminalDock(props: {
 			fontFamily: '"PiDeckCommitMono", "Cascadia Mono", Consolas, monospace',
 			fontSize: 13,
 			scrollback: 5000,
-			theme: theme.xterm,
+			theme: xtermTheme,
 		});
 		const fit = new FitAddon();
 		terminal.loadAddon(fit);
@@ -205,7 +230,7 @@ export function TerminalDock(props: {
 			dataDisposable.dispose();
 			terminal.dispose();
 		};
-	}, [activeTab, collapsed, props.terminal, theme.xterm]);
+	}, [activeTab, collapsed, props.terminal, xtermTheme]);
 
 	useEffect(() => {
 		fitRef.current?.fit();

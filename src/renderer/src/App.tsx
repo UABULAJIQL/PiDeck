@@ -394,7 +394,7 @@ export function App() {
   const [environmentDialog, setEnvironmentDialog] = useState(false);
   const DEFAULT_LIST_WIDTH = 250;
   const [listWidth, setListWidth] = useState(DEFAULT_LIST_WIDTH);
-  const [drawerWidth, setDrawerWidth] = useState(360);
+  const [drawerWidth, setDrawerWidth] = useState(270);
   const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_HEIGHT);
   const [composerAutoHeight, setComposerAutoHeight] =
     useState(COMPOSER_MIN_HEIGHT);
@@ -2262,6 +2262,24 @@ export function App() {
     }
   }
 
+  async function createBranch(branchName: string) {
+    if (!activeProjectId || !branchName.trim()) return;
+    setSwitchingBranch(branchName);
+    try {
+      const next = await api.git.createBranch(activeProjectId, branchName);
+      setGitInfo(next);
+      showToast(t("app.branchCreated", { branch: branchName }), 2500);
+    } catch (error) {
+      showToast(
+        t("app.branchCreateFailed", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      setSwitchingBranch(null);
+    }
+  }
+
   function openDrawer(panel: DrawerPanel) {
     if (drawerPinned && panel !== drawerPinnedPanel) return;
     if (panel === "sessions" && activeProjectId) {
@@ -2588,6 +2606,7 @@ export function App() {
                   onDragEnd={finishProjectDrag}
                   onContextMenu={(event) => {
                     event.preventDefault();
+                    if (projectIsChat) return;
                     setProjectMenu({
                       x: event.clientX,
                       y: event.clientY,
@@ -2687,15 +2706,6 @@ export function App() {
                           <strong>{agent.title}</strong>
                         </div>
                       </div>
-                      <span
-                        className="conversation-close"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void closeAgent(agent.id);
-                        }}
-                      >
-                        <X size={13} />
-                      </span>
                     </button>
                   ))}
                 {!isCollapsed && agentDisplay.hasHiddenAgents && (
@@ -2742,10 +2752,6 @@ export function App() {
                             <strong>{session.name || t("common.untitled")}</strong>
                           </div>
                         </div>
-                        <span
-                          className="conversation-close-placeholder"
-                          aria-hidden="true"
-                        />
                       </button>
                     ))}
                   </div>
@@ -2860,6 +2866,7 @@ export function App() {
                     gitInfo={gitInfo}
                     switchingBranch={switchingBranch}
                     onSwitch={switchBranch}
+                    onCreateBranch={createBranch}
                   />
                 )}
               </div>
@@ -3279,6 +3286,10 @@ export function App() {
         <ProjectContextMenu
           menu={projectMenu}
           onClose={() => setProjectMenu(null)}
+          onRevealProject={() => {
+            void api.files.showInFolder(projectMenu.project.path);
+            setProjectMenu(null);
+          }}
           onImportCodexSessions={() => openCodexImport(projectMenu.project)}
           onRemoveProject={async () => {
             const project = projectMenu.project;
@@ -3295,11 +3306,6 @@ export function App() {
           actionLoading={agentActionLoading}
           onClose={() => {
             if (!agentActionLoading) setAgentMenu(null);
-          }}
-          onActivate={() => {
-            setActiveAgentId(agentMenu.agent.id);
-            setActiveProjectId(agentMenu.agent.projectId);
-            setAgentMenu(null);
           }}
           onRename={() => openAgentRename(agentMenu.agent)}
           onExport={() => {
@@ -3325,9 +3331,6 @@ export function App() {
           onClose={() => {
             if (!sessionActionLoading) setSessionMenu(null);
           }}
-          onActivate={() => {
-            void openSidebarSession(sessionMenu.projectId, sessionMenu.session);
-          }}
           onRename={() =>
             openSessionRename(sessionMenu.projectId, sessionMenu.session)
           }
@@ -3344,6 +3347,11 @@ export function App() {
             ).then((tab) => {
               if (tab) setRpcLogAgentId(tab.id);
             });
+          }}
+          onDeleteSession={() => {
+            const session = sessionMenu.session;
+            setSessionMenu(null);
+            void deleteHistorySession(session);
           }}
         />
       )}

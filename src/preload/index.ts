@@ -109,6 +109,12 @@ const api = {
 				projectId,
 				branch,
 			) as Promise<GitBranchInfo>,
+		createBranch: (projectId: string, branchName: string) =>
+			ipcRenderer.invoke(
+				ipcChannels.gitCreateBranch,
+				projectId,
+				branchName,
+			) as Promise<GitBranchInfo>,
 	},
 	pi: {
 		check: () =>
