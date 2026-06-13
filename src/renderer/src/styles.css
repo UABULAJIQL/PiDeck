@@ -59,6 +59,9 @@
 	--shadow-modal: 0 24px 80px rgba(20, 24, 31, 0.22);
 	--shadow-composer: 0 8px 28px rgba(20, 24, 31, 0.08);
 	--focus-ring: 0 0 0 2px rgba(35, 134, 54, 0.16);
+	--overlay-backdrop: rgba(15, 18, 24, 0.35);
+	--overlay-backdrop-soft: rgba(15, 23, 42, 0.14);
+	--overlay-backdrop-subtle: rgba(15, 23, 42, 0.08);
 	font-family: var(--font-family-base);
 	background: var(--color-bg-app);
 	color: var(--color-text-primary);
@@ -89,6 +92,9 @@
 	--shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.55);
 	--shadow-composer: 0 8px 28px rgba(0, 0, 0, 0.28);
 	--focus-ring: 0 0 0 2px rgba(85, 215, 116, 0.28);
+	--overlay-backdrop: rgba(0, 0, 0, 0.48);
+	--overlay-backdrop-soft: rgba(0, 0, 0, 0.4);
+	--overlay-backdrop-subtle: rgba(0, 0, 0, 0.24);
 }
 * {
 	box-sizing: border-box;
@@ -3306,7 +3312,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	z-index: 130;
 	display: grid;
 	place-items: center;
-	background: rgba(15, 23, 42, 0.14);
+	background: var(--overlay-backdrop-soft);
 }
 .session-delete-confirm {
 	width: min(360px, calc(100vw - 48px));
@@ -3426,7 +3432,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	z-index: 50;
 	display: grid;
 	place-items: center;
-	background: rgba(15, 18, 24, 0.35);
+	background: var(--overlay-backdrop);
 	backdrop-filter: blur(2px);
 }
 .context-backdrop {
@@ -3482,8 +3488,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	outline: none;
 }
 .feedback-body textarea:focus {
-	border-color: #93c5fd;
-	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+	border-color: var(--color-accent);
+	box-shadow: var(--focus-ring);
 }
 .feedback-report-block {
 	display: grid;
@@ -4106,7 +4112,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	position: fixed;
 	inset: 0;
 	z-index: 115;
-	background: rgba(15, 23, 42, 0.08);
+	background: var(--overlay-backdrop-subtle);
 }
 .picker-palette {
 	position: fixed;
@@ -6628,7 +6634,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .skill-delete-confirm small {
 	display: block;
 	margin-top: -4px;
-	color: #8a94a6;
+	color: var(--color-text-tertiary);
 	font-size: var(--font-size-caption);
 	word-break: break-all;
 }
