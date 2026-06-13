@@ -4514,7 +4514,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-sidebar-group button.active {
-	border-color: rgba(35, 134, 54, 0.24);
+	border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border-subtle));
 	background: var(--color-bg-active);
 	color: var(--color-text-primary);
 	box-shadow: inset 3px 0 0 var(--color-accent);
@@ -4545,7 +4545,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	cursor: pointer;
 }
 .config-primary-tabs button.active {
-	border-color: rgba(35, 134, 54, 0.28);
+	border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border-subtle));
 	background: var(--color-bg-active);
 	color: var(--color-accent);
 }
@@ -4601,7 +4601,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	padding: 10px 14px;
 	border-radius: var(--radius-sm);
 	background: var(--color-danger-soft);
-	border: 1px solid rgba(180, 35, 24, 0.22);
+	border: 1px solid color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
 	color: var(--color-danger);
 	font-size: var(--font-size-control);
 }
@@ -4625,7 +4625,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	bottom: 18px;
 	left: 50%;
 	transform: translateX(-50%);
-	background: rgba(32, 33, 36, 0.92);
+	background: color-mix(in srgb, var(--color-bg-app) 28%, black);
 	color: var(--color-text-inverse);
 	padding: 8px 18px;
 	border-radius: var(--radius-pill);
@@ -4695,7 +4695,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 
 .config-btn.danger {
-	border-color: rgba(180, 35, 24, 0.22);
+	border-color: color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
 	color: var(--color-danger);
 }
 
@@ -4897,7 +4897,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-add-provider-row input:focus {
 	outline: none;
 	border-color: var(--color-accent);
-	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
+	box-shadow: var(--focus-ring);
 }
 
 .config-provider-list {
@@ -4919,7 +4919,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 .config-provider-card.expanded {
 	/* 展开态使用轻量绿色强调，避免强描边抢走弹窗主体层级；允许自定义下拉菜单溢出显示。 */
-	border-color: rgba(35, 134, 54, 0.32);
+	border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-border-subtle));
 	box-shadow: var(--shadow-border);
 	overflow: visible;
 }
@@ -5003,7 +5003,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 4px;
 	margin: 4px 0 10px;
 	padding: 10px 12px;
-	border: 1px solid rgba(37, 99, 235, 0.18);
+	border: 1px solid color-mix(in srgb, var(--color-info) 18%, var(--color-border-subtle));
 	border-radius: var(--radius-md);
 	background: color-mix(in srgb, var(--color-info) 8%, var(--color-bg-panel));
 	color: var(--color-info);
@@ -5042,7 +5042,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	gap: 10px;
 	margin-bottom: 14px;
 	padding: 14px;
-	border: 1px solid rgba(180, 35, 24, 0.24);
+	border: 1px solid color-mix(in srgb, var(--color-danger) 24%, var(--color-border-subtle));
 	border-radius: var(--radius-lg);
 	background: var(--color-danger-soft);
 	color: var(--color-danger);
@@ -5061,7 +5061,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-diagnostic-card pre {
 	margin: 0;
 	padding: 10px 12px;
-	border: 1px solid rgba(180, 35, 24, 0.24);
+	border: 1px solid color-mix(in srgb, var(--color-danger) 24%, var(--color-border-subtle));
 	border-radius: var(--radius-sm);
 	background: var(--color-bg-panel);
 	color: var(--color-danger);
