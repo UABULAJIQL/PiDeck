@@ -5739,7 +5739,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .config-raw-editor:focus {
 	outline: none;
 	border-color: var(--color-accent);
-	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
+	box-shadow: var(--focus-ring);
 }
 
 /* ── 图片预览区域 ──────────────────────────────────────── */
@@ -6403,7 +6403,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 .skill-location-picker > button.open {
 	border-color: var(--color-accent);
-	box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.14);
+	box-shadow: var(--focus-ring);
 }
 .skill-location-picker > button span {
 	overflow: hidden;
