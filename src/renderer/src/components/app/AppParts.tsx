@@ -1065,12 +1065,6 @@ export function ChatBubble(props: {
 					{isUser && (
 						<>
 							<button
-								onClick={() => props.onResendUserMessage?.(message)}
-								title={t("app.resendTitle")}
-							>
-								{t("app.resend")}
-							</button>
-							<button
 								onClick={() => {
 									const text = message.text;
 									// 编辑只把原消息放回输入框,不自动发送,方便用户二次加工。
@@ -1086,6 +1080,12 @@ export function ChatBubble(props: {
 								}}
 							>
 								{t("common.edit")}
+							</button>
+							<button
+								onClick={() => props.onResendUserMessage?.(message)}
+								title={t("app.resendTitle")}
+							>
+								{t("app.resend")}
 							</button>
 						</>
 					)}
