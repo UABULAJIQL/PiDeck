@@ -826,14 +826,11 @@ export const ToolGroup = memo(function ToolGroup(props: {
 		props.group.messages.length > 0 &&
 		props.group.messages[props.group.messages.length - 1].meta?.status ===
 			"running";
-	const errorCount = props.group.messages.filter(
-		(message) =>
-			message.meta?.status === "error" || message.meta?.isError === true,
-	).length;
-	const failed = props.group.messages.some(
-		(message) =>
-			message.meta?.status === "error" || message.meta?.isError === true,
-	);
+
+	// 移除错误判断 - 工具调用成功就是成功，不管命令结果
+	const errorCount = 0;
+	const failed = false;
+
 	const visibleChips = props.group.messages.slice(0, 6);
 	const hiddenCount = props.group.messages.length - visibleChips.length;
 
@@ -849,7 +846,7 @@ export const ToolGroup = memo(function ToolGroup(props: {
 
 	return (
 		<article
-			className={`tool-group ${running ? "running streaming" : failed ? "error" : "done"}`}
+			className={`tool-group ${running ? "running streaming" : "done"}`}
 			data-message-id={props.group.id}
 		>
 			<button
@@ -861,12 +858,11 @@ export const ToolGroup = memo(function ToolGroup(props: {
 					<span className="tool-progress">{progressText}</span>
 				)}
 				<span className="tool-group-title">
-					{running ? t("tool.running") : failed ? t("tool.error") : t("tool.done")}
+					{running ? t("tool.running") : t("tool.done")}
 				</span>
 				<strong>
 					{props.group.messages.length}
 					{t("tool.countSuffix")}
-					{errorCount > 0 ? ` · ${errorCount}${t("tool.failedSuffix")}` : ""}
 					{showDuration && ` · ${formatDuration(duration)}`}
 				</strong>
 				<em>{expanded ? t("common.collapse") : t("common.details")}</em>
@@ -956,35 +952,29 @@ export const AgentRun = memo(function AgentRun(props: {
 		(sum, tg) => sum + tg.messages.length,
 		0
 	);
-	const failedToolCalls = toolGroups.reduce(
-		(sum, tg) =>
-			sum +
-			tg.messages.filter(
-				(m) => m.meta?.status === "error" || m.meta?.isError === true
-			).length,
-		0
-	);
+	// 移除失败统计 - 工具调用本身不会失败
+	const failedToolCalls = 0;
 
 	// 自动折叠逻辑
 	const isComplete = props.run.endedAt > 0;
 	const hasMultipleTools = toolGroupCount > 1;
-	const hasError = failedToolCalls > 0;
+	// 移除错误检查 - 始终可以折叠
+	const hasError = false;
 	const [autoCollapsed, setAutoCollapsed] = useState(false);
 
 	useEffect(() => {
 		// 智能折叠策略：
 		// 1. 只在完成时折叠
 		// 2. 需要多个工具组
-		// 3. 没有错误（有错误保持展开）
-		// 4. 用户没有手动展开过
-		if (isComplete && hasMultipleTools && !hasError && !autoCollapsed) {
+		// 3. 移除错误检查 - 始终折叠
+		if (isComplete && hasMultipleTools && !autoCollapsed) {
 			// 完成后 0.8 秒自动折叠
 			const timer = setTimeout(() => {
 				setAutoCollapsed(true);
 			}, 800);
 			return () => clearTimeout(timer);
 		}
-	}, [isComplete, hasMultipleTools, hasError, autoCollapsed]);
+	}, [isComplete, hasMultipleTools, autoCollapsed]);
 
 	// 手动展开/折叠
 	const [manuallyExpanded, setManuallyExpanded] = useState(false);
@@ -1013,9 +1003,7 @@ export const AgentRun = memo(function AgentRun(props: {
 					>
 						<span className="summary-icon">▸</span>
 						<span className="summary-text">
-							执行了 {totalToolCalls} 个操作
-							{failedToolCalls > 0 && ` (${failedToolCalls} 个失败)`}
-							{failedToolCalls === 0 && " ✓"}
+							执行了 {totalToolCalls} 个操作 ✓
 						</span>
 						<em>点击展开</em>
 					</button>

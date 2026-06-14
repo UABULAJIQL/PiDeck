@@ -2544,28 +2544,6 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 	background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-panel));
 }
 /* 流式高亮 */
-.tool-group.streaming {
-	border-left: 3px solid var(--color-success);
-	border-color: color-mix(in srgb, var(--color-success) 30%, var(--color-border-subtle));
-	background: color-mix(in srgb, var(--color-success) 5%, var(--color-bg-panel));
-	animation: pulse-tool-group 2s ease-in-out infinite;
-}
-@keyframes pulse-tool-group {
-	0%, 100% {
-		border-left-color: var(--color-success);
-		opacity: 1;
-	}
-	50% {
-		border-left-color: color-mix(in srgb, var(--color-success) 60%, transparent);
-		opacity: 0.96;
-	}
-}
-.tool-group.error {
-	border-color: color-mix(in srgb, var(--color-danger) 26%, var(--color-border-subtle));
-	background: var(--color-danger-soft);
-}
-
-/* ResponseBubble 内的 tool-group：取消外层偏移，因为已在 msg-content 内对齐。 */
 .chat-message .tool-group {
 	max-width: 100%;
 	margin: 10px 0 0;
