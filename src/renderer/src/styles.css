@@ -2579,7 +2579,7 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 /* Agent Run Timeline */
 .agent-run-stack {
 	display: flex;
-	gap: 16px;
+	gap: 12px;
 	position: relative;
 }
 .agent-run-timeline {
@@ -2588,6 +2588,7 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 	align-items: center;
 	padding-top: 4px;
 	flex-shrink: 0;
+	width: 32px; /* 固定宽度，更紧凑 */
 }
 .timeline-step {
 	display: flex;
@@ -2596,13 +2597,26 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 	position: relative;
 }
 .timeline-dot {
-	width: 24px;
-	height: 24px;
+	width: 20px; /* 从 24px 缩小到 20px */
+	height: 20px;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 12px;
+	font-size: 11px; /* 从 12px 缩小 */
+	font-weight: 600;
+	flex-shrink: 0;
+	z-index: 1;
+	transition: all 0.3s ease;
+}
+.timeline-dot {
+	width: 20px; /* 从 24px 缩小到 20px */
+	height: 20px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px; /* 从 12px 缩小 */
 	font-weight: 600;
 	flex-shrink: 0;
 	z-index: 1;
@@ -2611,30 +2625,30 @@ body.is-terminal-resizing .terminal-resize-handle::before {
 .timeline-step.tool.done .timeline-dot {
 	background: var(--color-success);
 	color: white;
-	box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 15%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 15%, transparent);
 }
 .timeline-step.tool.running .timeline-dot {
 	background: var(--color-warning);
 	color: white;
-	box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-warning) 15%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning) 15%, transparent);
 	animation: pulse-timeline-dot 2s ease-in-out infinite;
 }
 .timeline-step.tool.error .timeline-dot {
 	background: var(--color-danger);
 	color: white;
-	box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 15%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 15%, transparent);
 }
 .timeline-step.assistant .timeline-dot {
 	background: var(--color-accent);
 	color: white;
-	box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 15%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
 }
 .timeline-line {
 	width: 2px;
 	flex: 1;
-	min-height: 40px;
+	min-height: 30px; /* 从 40px 缩短 */
 	background: var(--color-border-subtle);
-	margin: 4px 0;
+	margin: 2px 0; /* 从 4px 缩小 */
 }
 .timeline-step.tool.done .timeline-line {
 	background: color-mix(in srgb, var(--color-success) 30%, var(--color-border-subtle));
