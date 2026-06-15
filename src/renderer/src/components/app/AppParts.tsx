@@ -279,6 +279,12 @@ export function ComposerToolbar(props: {
 }) {
 	const ctxPercent = props.state?.contextPercent;
 	const showCompact = ctxPercent != null && ctxPercent > 30;
+	// 根据当前 thinkingLevel 查找对应的多语言标签
+	const currentThinkingLevel = props.state?.thinkingLevel;
+	const thinkingLevelLabel = currentThinkingLevel
+		? THINKING_LEVELS.find((level) => level.value === currentThinkingLevel)?.labelKey
+		: undefined;
+	const thinkingDisplay = thinkingLevelLabel ? t(thinkingLevelLabel) : "-";
 	return (
 		<div className="composer-toolbar">
 			<button onClick={props.onPickModel} disabled={props.disabled}>
@@ -288,7 +294,7 @@ export function ComposerToolbar(props: {
 				{t("app.cycleModel")}
 			</button>
 			<button onClick={props.onPickThinking} disabled={props.disabled}>
-				{t("app.think")}: {props.state?.thinkingLevel ?? "-"}
+				{t("app.think")}: {thinkingDisplay}
 			</button>
 			{showCompact && (
 				<button

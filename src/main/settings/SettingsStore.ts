@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { AppSettings } from "../../shared/types";
 
 const defaultSettings: AppSettings = {
-  useNativeTitleBar: true,
+  useNativeTitleBar: false,
   showNativeMenu: false,
   sendShortcut: "enter-send",
   theme: "system",

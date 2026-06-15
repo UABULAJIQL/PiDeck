@@ -3,6 +3,11 @@ import { t } from "../i18n";
 export function getUserAgentOptions() {
 	return [
 		{ value: "", label: t("config.userAgentRuntimeDefault") },
+		{ value: "claude-cli/2.1.161 (external, cli)", label: "claude-cli/2.1.161 (external, cli)" },
+		{ value: "claude-cli/2.1.161", label: "claude-cli/2.1.161" },
+		{ value: "claude-code/1.0.0", label: "claude-code/1.0.0" },
+		{ value: "claude-code/0.1.0", label: "claude-code/0.1.0" },
+		{ value: "Kilo-Code/1.0", label: "Kilo-Code/1.0" },
 		{ value: "OpenAI/JS 6.26.0", label: "OpenAI/JS 6.26.0" },
 		{ value: "anthropic-sdk-typescript/0.27.3", label: "Anthropic SDK (anthropic-sdk-typescript/0.27.3)" },
 		{ value: "Mozilla/5.0", label: "Mozilla/5.0 (浏览器)" },
