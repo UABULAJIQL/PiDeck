@@ -435,7 +435,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 				}));
 				showToast(t("config.fetchedModels", { count: result.models.length }));
 			} else {
-				setError(result.error ?? t("config.fetchModelsFailed"));
+				setError((result.error ?? t("config.fetchModelsFailed")) + "\n" + t("config.fetchModelsHint"));
 			}
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));

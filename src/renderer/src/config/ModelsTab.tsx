@@ -688,6 +688,12 @@ export function ModelsTab(props: {
 												</div>
 											)}
 
+								{(props.testResult && !props.testResult.success && props.testResult.providerName === name) && (
+									<div className="config-test-hint">
+										💡 {t("config.testConnectionHint")}
+									</div>
+								)}
+
 										<div className="config-form-row">
 											<label>{t("config.compatibility")}</label>
 											<div className="config-compat-group">

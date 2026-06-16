@@ -5805,6 +5805,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	border: 1px solid color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
 	color: var(--color-danger);
 	font-size: var(--font-size-control);
+	white-space: pre-line;
+	line-height: 1.6;
 }
 
 .config-empty {
@@ -6542,7 +6544,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 
 /* API 类型下拉菜单 —— 宽菜单带描述 */
 .config-api-type-menu {
-	width: 480px;
+	width: 600px;
 	max-width: calc(100vw - 40px);
 	max-height: 280px;
 }
@@ -7266,6 +7268,17 @@ body.is-composer-resizing .composer-resize-handle::after {
 	word-break: break-all;
 	color: var(--color-text-primary);
 	line-height: 1.6;
+}
+
+.config-test-hint {
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+	border-left: 3px solid var(--color-warning);
+	color: var(--color-warning);
+	font-size: var(--font-size-caption);
+	line-height: 1.5;
 }
 
 .config-raw-tab select {
