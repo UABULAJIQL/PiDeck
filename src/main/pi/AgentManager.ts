@@ -37,7 +37,9 @@ export class AgentManager {
 	) {}
 
 	list() {
-		return [...this.agents.values()].map((runtime) => runtime.tab);
+		return [...this.agents.values()]
+			.map((runtime) => runtime.tab)
+			.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 	}
 
 	getMessages(agentId: string) {
