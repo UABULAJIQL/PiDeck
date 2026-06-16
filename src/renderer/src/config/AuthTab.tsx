@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { t } from "../i18n";
 import type { AuthFile } from "./configTypes";
 import { SecretInput } from "./ConfigShared";
@@ -48,6 +48,7 @@ export function AuthTab(props: {
 	onCancelAddAuth: () => void;
 	onChangeNewAuthName: (name: string) => void;
 	onConfirmAddAuth: () => void;
+	onDuplicateAuth: (provider: string) => void;
 	onDeleteAuth: (provider: string) => void;
 	onUpdate: (provider: string, field: string, value: string) => void;
 	onSave: () => void;

@@ -583,6 +583,23 @@ function ConfigModalContent(props: ConfigModalProps) {
 		});
 	};
 
+	const handleDuplicateAuth = (provider: string) => {
+		const sourceAuth = authData[provider];
+		if (!sourceAuth) return;
+		const duplicatedAuth = JSON.parse(JSON.stringify(sourceAuth));
+		let newName = `${provider} copy`;
+		let counter = 2;
+		while (authData[newName]) {
+			newName = `${provider} copy ${counter}`;
+			counter++;
+		}
+		setAuthData({
+			...authData,
+			[newName]: duplicatedAuth,
+		});
+		setExpandedAuth(newName);
+	};
+
 	const handleSaveAuth = async () => {
 		await saveAndReload(() => api.config.saveAuth(authData));
 		await loadConfig("auth");
@@ -902,7 +919,8 @@ function ConfigModalContent(props: ConfigModalProps) {
 							onCancelAddAuth={() => setAddingAuth(false)}
 							onChangeNewAuthName={setNewAuthName}
 							onConfirmAddAuth={handleAddAuth}
-							onDeleteAuth={handleDeleteAuth}
+							onDuplicateAuth={handleDuplicateAuth}
+						onDeleteAuth={handleDeleteAuth}
 							onUpdate={handleUpdateAuth}
 							onSave={handleSaveAuth}
 						/>
