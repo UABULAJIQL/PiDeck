@@ -5134,6 +5134,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 .picker-palette-list {
 	flex: 1;
 	overflow-y: auto;
+	overflow-x: hidden;
 	padding: 6px;
 	scrollbar-width: thin;
 	scrollbar-color: var(--color-border-default) transparent;
@@ -5172,7 +5173,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	color: var(--color-text-tertiary);
 }
 .model-group .picker-palette-item {
-	margin-left: 16px;
+	margin-left: 10px;
 	margin-bottom: 2px;
 	border-left: 2px solid var(--color-border-subtle);
 	border-radius: 0 var(--radius-md) var(--radius-md) 0;
@@ -5181,11 +5182,11 @@ body.is-composer-resizing .composer-resize-handle::after {
 	width: 100%;
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 10px;
 	border: 0;
 	border-radius: var(--radius-lg);
 	background: transparent;
-	padding: 10px 12px;
+	padding: 8px 10px;
 	text-align: left;
 	cursor: pointer;
 	transition: background 0.08s;
@@ -5211,8 +5212,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 }
 .picker-palette-label {
 	flex: 0 0 auto;
-	min-width: 140px;
-	max-width: 220px;
+	min-width: 90px;
+	max-width: 160px;
 	color: var(--color-text-primary);
 	font-size: var(--font-size-control);
 	font-weight: 600;
