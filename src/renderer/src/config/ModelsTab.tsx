@@ -363,7 +363,7 @@ export function ModelsTab(props: {
 								}}
 							>
 								{batchMode && (
-								<label className="config-batch-checkbox">
+								<label className="config-batch-checkbox" onClick={(e) => e.stopPropagation()}>
 									<input
 										type="checkbox"
 										checked={selectedProviders.has(name)}
