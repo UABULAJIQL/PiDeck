@@ -206,7 +206,7 @@ export function ModelsTab(props: {
 						{t("config.providerGuide")}
 					</button>
 					<button
-						className="config-btn"
+						className="config-btn danger-fill"
 						onClick={() => {
 							if (batchMode) {
 								setBatchMode(false);

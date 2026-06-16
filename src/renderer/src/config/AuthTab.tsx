@@ -92,7 +92,7 @@ export function AuthTab(props: {
 						{t("config.authGuide")}
 					</button>
 					<button
-						className="config-btn"
+						className="config-btn danger-fill"
 						onClick={() => {
 							if (batchMode) {
 								setBatchMode(false);
