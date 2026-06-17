@@ -245,61 +245,64 @@ export class ConfigManager {
 
 	// ── 远程拉取模型列表 ─────────────────────────────────
 
-	/**
-	 * 向 OpenAI 兼容的 /models 端点拉取可用模型列表。
-	 * 使用 Authorization: Bearer <apiKey> 认证。
-	 * 返回 { id, name? } 数组，或失败时返回 error。
-	 */
-	async fetchProviderModels(
-		baseUrl: string,
-		apiKey: string,
-		apiType?: string,
-	): Promise<{ success: boolean; models?: Array<{ id: string; name?: string }>; error?: string }> {
-		const request = this.buildModelsRequest(baseUrl, apiKey, apiType);
-		try {
-			const controller = new AbortController();
-			// 10 秒超时，避免网络不通时长时间卡住
-			const timeout = setTimeout(() => controller.abort(), 10_000);
+		/**
+		 * 向 provider 拉取可用模型列表。
+		 * 对 OpenAI 兼容网关优先尝试 /v1/models，再回退到 /models，兼容
+		 * baseUrl 既可能配置成根路径，也可能已经包含 /v1 的实际情况。
+		 */
+		async fetchProviderModels(
+			baseUrl: string,
+			apiKey: string,
+			apiType?: string,
+		): Promise<{ success: boolean; models?: Array<{ id: string; name?: string }>; error?: string }> {
+			const requests = this.buildModelsRequests(baseUrl, apiKey, apiType);
+			let lastError: string | undefined;
 
-			try {
-				// 桌面端配置检测属于 Electron 主进程自身请求；使用 net.fetch 才能走 defaultSession 的代理配置。
-				const res = await net.fetch(request.url, {
-					method: request.method ?? "GET",
-					headers: request.headers,
-					signal: controller.signal,
-				});
+			for (const request of requests) {
+				try {
+					const controller = new AbortController();
+					// 10 秒超时，避免网络不通时长时间卡住
+					const timeout = setTimeout(() => controller.abort(), 10_000);
 
-				if (!res.ok) {
-					return {
-						success: false,
-						error: `HTTP ${res.status}: ${res.statusText}`,
-					};
+					try {
+						// 桌面端配置检测属于 Electron 主进程自身请求；使用 net.fetch 才能走 defaultSession 的代理配置。
+						const res = await net.fetch(request.url, {
+							method: request.method ?? "GET",
+							headers: request.headers,
+							signal: controller.signal,
+						});
+
+						if (!res.ok) {
+							lastError = `HTTP ${res.status}: ${res.statusText}`;
+							continue;
+						}
+
+						const body = (await res.json()) as Record<string, unknown>;
+						const models = this.parseModelsResponse(body, apiType);
+
+						if (models.length === 0) {
+							lastError = "接口返回了空的模型列表";
+							continue;
+						}
+
+						return { success: true, models };
+					} finally {
+						clearTimeout(timeout);
+					}
+				} catch (e) {
+					const msg =
+						e instanceof Error
+							? e.name === "AbortError"
+								? "请求超时，请检查网络或 baseUrl"
+								: e.message
+							: String(e);
+					lastError = this.redactSecret(msg, apiKey);
 				}
-
-				const body = (await res.json()) as Record<string, unknown>;
-				const models = this.parseModelsResponse(body, apiType);
-
-				if (models.length === 0) {
-					return {
-						success: false,
-						error: "接口返回了空的模型列表",
-					};
-				}
-
-				return { success: true, models };
-			} finally {
-				clearTimeout(timeout);
 			}
-		} catch (e) {
-			const msg =
-				e instanceof Error
-					? e.name === "AbortError"
-						? "请求超时，请检查网络或 baseUrl"
-						: e.message
-					: String(e);
-			return { success: false, error: this.redactSecret(msg, apiKey) };
+
+			return { success: false, error: lastError ?? "获取模型列表失败" };
 		}
-	}
+
 
 	// ── 快速测试连接 ─────────────────────────────────────
 
@@ -307,45 +310,52 @@ export class ConfigManager {
 	 * 向 provider 发送一条最小聊天请求验证 baseUrl、apiKey 和模型是否正常。
 	 * 返回测试结果，包含模型名、响应摘要、token 用量和延迟。
 	 */
-	/**
-	 * 根据 API 类型构造测试请求的 URL、headers 和 body。
-	 * 支持的 api 类型：openai-completions, openai-responses, anthropic-messages, google-generative-ai。
-	 * 历史别名 openai-chat-completions 会归一为 pi 官方的 openai-completions。
-	 */
-	private buildModelsRequest(
-		baseUrl: string,
-		apiKey: string,
-		apiType?: string,
-	): TestRequest {
-		const u = baseUrl.replace(/\/+$/, "");
-		const api = this.normalizeApiType(apiType);
+		/**
+		 * 根据 API 类型构造获取模型列表的请求。
+		 * OpenAI 兼容网关优先尝试 /v1/models；若 baseUrl 已经包含 /v1，则先直接
+		 * 访问当前路径下的 /models，避免错误地拼成 /v1/v1/models。
+		 */
+		private buildModelsRequests(
+			baseUrl: string,
+			apiKey: string,
+			apiType?: string,
+		): TestRequest[] {
+			const u = baseUrl.replace(/\/+$/, "");
+			const api = this.normalizeApiType(apiType);
 
-		if (api === "google-generative-ai") {
-			return {
-				url: `${u}/models?key=${encodeURIComponent(apiKey)}`,
-				headers: { "Content-Type": "application/json" },
-			};
-		}
+			if (api === "google-generative-ai") {
+				return [{
+					url: `${u}/models?key=${encodeURIComponent(apiKey)}`,
+					headers: { "Content-Type": "application/json" },
+				}];
+			}
 
-		if (api === "anthropic-messages") {
-			return {
-				url: `${u}/models`,
-				headers: this.withAnthropicSdkUserAgent({
-					"x-api-key": apiKey,
-					"anthropic-version": "2023-06-01",
-					"Content-Type": "application/json",
-				}),
-			};
-		}
+			if (api === "anthropic-messages") {
+				return [{
+					url: `${u}/models`,
+					headers: this.withAnthropicSdkUserAgent({
+						"x-api-key": apiKey,
+						"anthropic-version": "2023-06-01",
+						"Content-Type": "application/json",
+					}),
+				}];
+			}
 
-		return {
-			url: `${u}/models`,
-			headers: this.withOpenAiSdkUserAgent({
+			const headers = this.withOpenAiSdkUserAgent({
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
-			}),
-		};
-	}
+			});
+			const primaryUrl = /\/v1$/i.test(u) ? `${u}/models` : `${u}/v1/models`;
+			const fallbackUrl = `${u}/models`;
+
+			return primaryUrl === fallbackUrl
+				? [{ url: primaryUrl, headers }]
+				: [
+					{ url: primaryUrl, headers },
+					{ url: fallbackUrl, headers },
+				];
+		}
+
 
 	private parseModelsResponse(
 		body: Record<string, unknown>,

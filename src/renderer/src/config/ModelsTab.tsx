@@ -114,6 +114,7 @@ export function ModelsTab(props: {
 	renameValue: string;
 	fetchingProvider: string | null;
 	fetchedModels: Record<string, Array<{ id: string; name?: string }>>;
+	fetchModelsErrorByProvider: Record<string, string | undefined>;
 	testingProvider: string | null;
 	testResult: {
 		providerName: string;
@@ -782,10 +783,15 @@ export function ModelsTab(props: {
 												>
 													{t("config.addModelManual")}
 												</button>
-											</div>
 										</div>
+									</div>
 
-										{/* 下拉选择模型 */}
+									{props.fetchModelsErrorByProvider[name] && (
+										<div className="config-error">{props.fetchModelsErrorByProvider[name]}</div>
+									)}
+
+									{/* 下拉选择模型 */}
+
 										{addingModelDropdown === name &&
 											props.fetchedModels[name] && (
 												<div className="config-model-dropdown-row">
