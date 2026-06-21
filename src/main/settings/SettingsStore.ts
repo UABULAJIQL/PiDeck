@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AppSettings } from "../../shared/types";
+import type { AppSettings, AppWindowState } from "../../shared/types";
 
 const defaultSettings: AppSettings = {
   useNativeTitleBar: false,
@@ -28,6 +28,7 @@ const defaultSettings: AppSettings = {
   rpcTimeout: 600_000,
   linkOpenMode: "external",
   maxEditorFileSizeMB: 5,
+  providerPrefixes: {} as Record<string, string>,
 };
 
 export class SettingsStore {
@@ -58,13 +59,25 @@ export class SettingsStore {
     return this.get();
   }
 
+  /**
+   * 只持久化窗口状态（位置、尺寸、最大化），不触发菜单重设或 IPC 通知。
+   * 窗口的 resize/move 事件频率较高，不宜引入额外副作用。
+   * 采用 merge 模式保留未来可能新增的子字段。
+   */
+  async updateWindowState(windowState: AppWindowState): Promise<void> {
+    this.settings = {
+      ...this.settings,
+      windowState: {
+        ...this.settings.windowState,
+        ...windowState,
+      },
+    };
+    await this.save();
+  }
+
   applyMenu() {
-    // 菜单属于 Electron 外壳设置，不影响 pi agent；默认隐藏以获得更接近独立工具的观感。
-    if (this.settings.showNativeMenu) {
-      Menu.setApplicationMenu(null);
-    } else {
-      Menu.setApplicationMenu(null);
-    }
+    // 菜单属于 Electron 外壳设置，不影响 pi agent；始终保持隐藏以获得更接近独立工具的观感。
+    Menu.setApplicationMenu(null);
   }
 
   createWindowOptions() {

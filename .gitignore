@@ -40,7 +40,12 @@ coverage/
 
 # Local artifacts
 *.local
+build-release.local.bat
+run.local.bat
 # 本地下载/导入的临时文件不参与版本发布，避免把用户机器上的产物打进 tag。
 downloads/
 
 .pi-lens
+
+# CodeGraph index (local tool state, not project source)
+.codegraph/

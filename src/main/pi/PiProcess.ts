@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { PiRpcClient } from "./PiRpcClient";
+import { PiRpcClient, type RpcServerRequest } from "./PiRpcClient";
 import { PiLocator } from "./PiLocator";
 import type { AppSettings } from "../../shared/types";
 
@@ -27,17 +27,29 @@ export class PiProcess extends EventEmitter {
     return this.cwd === targetCwd && this.isRunning();
   }
 
-  /** 放回预热池：只 abort 当前操作 + 重置到新 session，不杀进程 */
+  /**
+   * 放回预热池时只停止当前操作，不切换会话。
+   * 关闭 Agent 不是用户主动新建会话；如果这里调用 new_session，历史列表会多出同名空白副本。
+   */
   park() {
     if (!this.proc || !this.rpc) return;
     this.parked = true;
     this.rpc.notify({ type: "abort" });
-    this.rpc.request({ type: "new_session" }).catch(() => {});
   }
 
   /** 从预热池取出复用：清除 parked 标记 */
   unpark() {
     this.parked = false;
+  }
+
+  async prepareForReuse(sessionPath?: string) {
+    if (!this.rpc) throw new Error("pi process is not running");
+    await this.rpc.request(
+      sessionPath
+        ? { type: "switch_session", sessionPath }
+        : { type: "new_session" },
+      120_000,
+    );
   }
 
   /** 是否在预热池中 */
@@ -68,6 +80,9 @@ export class PiProcess extends EventEmitter {
     this.rpc = new PiRpcClient(this.proc.stdin, this.proc.stdout);
 
     this.rpc.on("event", event => this.emit("event", event));
+    this.rpc.on("server-request", (request: RpcServerRequest) =>
+      this.emit("server-request", request),
+    );
     this.rpc.on("protocol-error", line => this.emit("protocol-error", line));
     // 转发 RPC 日志到 AgentManager，用于前端调试面板展示
     this.rpc.on("log", entry => this.emit("rpc-log", entry));
@@ -95,6 +110,20 @@ export class PiProcess extends EventEmitter {
 
   isRunning(): boolean {
     return this.proc !== undefined && this.rpc !== undefined;
+  }
+
+  respond(
+    requestId: string | number,
+    result: unknown,
+    protocol: "extension-ui" | "json-rpc" = "json-rpc",
+  ) {
+    if (!this.rpc) throw new Error("pi process is not running");
+    this.rpc.respond(requestId, result, protocol);
+  }
+
+  sendBashInput(input: string) {
+    if (!this.rpc) throw new Error("pi process is not running");
+    return this.rpc.request({ type: "bash_input", input }, 5_000);
   }
 
   stop() {

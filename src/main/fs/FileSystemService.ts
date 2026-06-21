@@ -1,4 +1,4 @@
-import { readdir, unlink, rename as fsRename, rm } from "node:fs/promises";
+import { readdir, stat, unlink, rename as fsRename, rm } from "node:fs/promises";
 import { join, relative, dirname } from "node:path";
 import type { FileTreeNode } from "../../shared/types";
 
@@ -47,20 +47,27 @@ export class FileSystemService {
     });
   }
 
-  /** 删除文件或空目录；非空目录需要递归删除 */
+  /** 删除文件或目录；recursive=true 时才允许递归删除非空目录。 */
   async delete(targetPath: string, recursive = false): Promise<void> {
-    const stat = await import("node:fs/promises").then((m) => m.stat(targetPath));
-    if (stat.isDirectory()) {
-      await rm(targetPath, { recursive: true, force: true });
+    const info = await stat(targetPath);
+    if (info.isDirectory()) {
+      await rm(targetPath, { recursive, force: true });
     } else {
       await unlink(targetPath);
     }
   }
 
-  /** 重命名文件或目录 */
+  /** 重命名文件或目录，拒绝空名称和包含路径分隔符的名称。 */
   async rename(targetPath: string, newName: string): Promise<string> {
+    if (!newName || typeof newName !== "string" || !newName.trim()) {
+      throw new Error("新名称为空");
+    }
+    const trimmed = newName.trim();
+    if (/[/\\]/.test(trimmed)) {
+      throw new Error("新名称不能包含路径分隔符");
+    }
     const parent = dirname(targetPath);
-    const newPath = join(parent, newName);
+    const newPath = join(parent, trimmed);
     await fsRename(targetPath, newPath);
     return newPath;
   }

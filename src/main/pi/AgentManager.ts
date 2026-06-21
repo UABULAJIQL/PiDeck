@@ -15,12 +15,21 @@ import type {
 } from "../../shared/types";
 import { ipcChannels } from "../../shared/ipc";
 import { PiProcess } from "./PiProcess";
+import type { RpcServerRequest } from "./PiRpcClient";
 import { formatBashToolMessage } from "./bashResult";
+import { BashInputRequestTracker } from "./BashInputRequestTracker";
+import { isInteractiveServerRequest, toAgentServerRequest } from "./serverRequestRouting";
 import type { SettingsStore } from "../settings/SettingsStore";
 
 export class AgentManager {
 	private readonly agents = new Map<string, AgentRuntime>();
 	private readonly messages = new Map<string, ChatMessage[]>();
+	/**
+	 * 正在创建中的 agent，按“项目 + 会话路径/新会话”去重。
+	 * 启动阶段前端可能因为双击、StrictMode 或状态回放短时间重复触发 create；
+	 * 这里在主进程兜底，确保同一份创建请求最终只落成一个真实 agent。
+	 */
+	private readonly pendingCreates = new Map<string, Promise<AgentTab>>();
 	/** 预热池：已 park 的闲置 pi 进程，按 cwd 分组匹配复用 */
 	private readonly warmPool: PiProcess[] = [];
 	/** 当前流式思考的累积文本，用于实时推送给前端展示 */
@@ -33,6 +42,16 @@ export class AgentManager {
 	private readonly retryStatusMessageIds = new Map<string, string>();
 	/** 本地事件监听器（用于 FeishuBridge 等主进程内部订阅） */
 	private readonly localEventListeners = new Set<(agentId: string, event: unknown) => void>();
+	/**
+	 * Codex 审批等交互通过 server-initiated JSON-RPC request 进入；
+	 * desktop 需要暂存 requestId，等待 renderer 给出决策后再原样 respond，
+	 * 否则上游会一直阻塞当前 turn，用户看到的就是“选项无法操作、界面卡死”。
+	 */
+	private readonly pendingServerRequests = new Map<string, Map<string, RpcServerRequest>>();
+	private readonly bashInputRequests = new BashInputRequestTracker({
+		emitRequest: (agentId, request) => this.trackAndEmitServerRequest(agentId, request),
+		cancelRequest: (agentId, requestId) => this.cancelServerRequest(agentId, requestId),
+	});
 
 	constructor(
 		private readonly getProject: (id: string) => Project | undefined,
@@ -117,14 +136,45 @@ export class AgentManager {
 		};
 	}
 
+	private normalizeSessionPath(sessionPath?: string) {
+		if (!sessionPath) return undefined;
+		const normalized = sessionPath.replace(/\\/g, "/").replace(/\/+$/, "");
+		return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+	}
+
+	private getCreateDedupKey(input: CreateAgentInput) {
+		const normalizedSessionPath = this.normalizeSessionPath(input.sessionPath);
+		return normalizedSessionPath
+			? `${input.projectId}::session::${normalizedSessionPath}`
+			: `${input.projectId}::new-session`;
+	}
+
 	async create(input: CreateAgentInput) {
+		const dedupKey = this.getCreateDedupKey(input);
+		const pendingCreate = this.pendingCreates.get(dedupKey);
+		if (pendingCreate) return pendingCreate;
+
+		const createPromise = this.createInternal(input).finally(() => {
+			if (this.pendingCreates.get(dedupKey) === createPromise) {
+				this.pendingCreates.delete(dedupKey);
+			}
+		});
+		this.pendingCreates.set(dedupKey, createPromise);
+		return createPromise;
+	}
+
+	private async createInternal(input: CreateAgentInput) {
 		const project = this.getProject(input.projectId);
 		if (!project) throw new Error(`Project not found: ${input.projectId}`);
 
+		const normalizedSessionPath = this.normalizeSessionPath(input.sessionPath);
 		const id = randomUUID();
-		const existingForSession = input.sessionPath
+		const existingForSession = normalizedSessionPath
 			? [...this.agents.values()].find(
-					(runtime) => runtime.tab.sessionPath === input.sessionPath,
+					(runtime) =>
+						runtime.tab.projectId === input.projectId &&
+						this.normalizeSessionPath(runtime.tab.sessionPath) ===
+						normalizedSessionPath,
 				)
 			: undefined;
 		if (existingForSession) return existingForSession.tab;
@@ -142,16 +192,18 @@ export class AgentManager {
 		if (input.sessionPath) await this.repairAssistantUsage(input.sessionPath);
 
 		// 代理环境变量只能在子进程启动前注入；设置变更后通过 restart/new agent 创建新的进程快照。
-		// 优先从预热池中取匹配 cwd 的闲置进程，避免重复 spawn
-		const process = this.acquireFromPool(project.path) ?? new PiProcess(project.path, this.settingsStore.get());
+		// 优先从预热池中取匹配 cwd 的闲置进程，避免重复 spawn。
+		const pooledProcess = this.acquireFromPool(project.path);
+		const process = pooledProcess ?? new PiProcess(project.path, this.settingsStore.get());
 		const runtime: AgentRuntime = { tab, process };
 		this.agents.set(id, runtime);
 		this.messages.set(id, []);
 		this.emitState();
 
-		const client = process.start(input.sessionPath);
-
 		process.on("event", (event) => this.handlePiEvent(id, event));
+		process.on("server-request", (request) =>
+			this.handleServerRequest(id, request as RpcServerRequest),
+		);
 		process.on("stderr", (text) =>
 			this.emit(ipcChannels.agentsLog, { agentId: id, text }),
 		);
@@ -204,7 +256,15 @@ export class AgentManager {
 			this.emitState();
 		});
 
+		const client = process.start(input.sessionPath);
+
 		try {
+			if (pooledProcess) {
+				// 复用进程时 start() 不会重新带 --session 启动，必须显式切回目标会话；
+				// 只有用户真正创建新 Agent 时才 new_session，避免关闭 Agent 时产生空白历史副本。
+				await pooledProcess.prepareForReuse(input.sessionPath);
+			}
+
 			const state = await client.request({ type: "get_state" });
 			const data = state.data as
 				| { sessionId?: string; sessionFile?: string; sessionName?: string }
@@ -571,16 +631,10 @@ export class AgentManager {
 		return this.getRuntimeState(agentId);
 	}
 
-	async reload(agentId: string) {
-		// pi RPC 目前无法通过 prompt 入口正确发送斜线命令（/reload 会被当作文本），
-		// 因此前端已去掉 Reload 按钮，统一走 restart。此方法保留以兼容 IPC 通道。
-		await this.restart(agentId);
-	}
-
 	/**
 	 * 重启 agent 进程：停止当前 pi RPC 子进程，用同一个 session 重新启动。
 	 * 适用场景：修改了 provider 配置、切换了 API key、更新了 pi 版本后，
-	 * /reload 只重载 extension，不会重新读取配置文件，restart 才能生效。
+	 * 必须重启进程才能重新读取运行时配置。
 	 */
 	async restart(agentId: string): Promise<AgentTab> {
 		const runtime = this.requireRuntime(agentId);
@@ -727,14 +781,64 @@ export class AgentManager {
 		);
 	}
 
+	async respondServerRequest(
+		agentId: string,
+		requestId: string | number,
+		decision: unknown,
+	) {
+		const runtime = this.requireRuntime(agentId);
+		const requests = this.pendingServerRequests.get(agentId);
+		const normalizedKey = String(requestId);
+		const request = requests?.get(normalizedKey);
+		if (!requests || !request) {
+			throw new Error(`Pending request not found: ${normalizedKey}`);
+		}
+		if (request.type === "bash_input_request") {
+			const input = this.bashInputRequests.resolveResponse(decision);
+			try {
+				await runtime.process.sendBashInput(input);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				if (/Unknown command|No active bash stdin|timed out|timeout/i.test(message)) {
+					throw new Error(`CLI 确认写回失败：${message}。请完整重启 PiDeck 后重试，确保当前 agent 使用已更新的 Pi runtime。`);
+				}
+				throw error;
+			}
+			this.removePendingServerRequest(agentId, normalizedKey);
+			this.bashInputRequests.clearRequestId(agentId, normalizedKey);
+			return;
+		}
+		runtime.process.respond(
+			requestId,
+			decision,
+			request.type === "extension_ui_request" ? "extension-ui" : "json-rpc",
+		);
+		this.removePendingServerRequest(agentId, normalizedKey);
+	}
+
+	private removePendingServerRequest(agentId: string, requestId: string) {
+		const requests = this.pendingServerRequests.get(agentId);
+		requests?.delete(requestId);
+		if (requests?.size === 0) this.pendingServerRequests.delete(agentId);
+	}
+
 	async stop(agentId: string) {
 		const runtime = this.agents.get(agentId);
 		if (!runtime) return;
 		const process = runtime.process;
+		const canPark =
+			runtime.tab.status !== "running" &&
+			process.isRunning() &&
+			!process.isParked();
 		this.agents.delete(agentId);
 		this.messages.delete(agentId);
-		// 放回预热池：不杀进程，后续同项目 agent 可复用
-		if (process.isRunning() && !process.isParked()) {
+		this.pendingServerRequests.delete(agentId);
+		this.bashInputRequests.clearAgent(agentId);
+		// Agent 关闭后会放入预热池复用；旧监听器捕获了旧 agentId，必须清掉，
+		// 否则复用后的 extension_ui_request 可能被同时派发到已关闭会话，表现为确认框丢失或错位。
+		process.removeAllListeners();
+		// 只有空闲 agent 才放回预热池；运行中关闭必须杀进程，避免 abort/切会话竞态污染下一次激活。
+		if (canPark) {
 			process.park();
 			this.warmPool.push(process);
 		} else {
@@ -884,10 +988,8 @@ export class AgentManager {
 			// 同步刷新 runtimeState，将 isStreaming 重置为 false；
 			// 否则前端 isAgentBusy 依赖的 isStreaming 仍为过期的 true，导致排队 flush 无法触发。
 			void this.getRuntimeState(agentId)
-				.then((state) =>
-					this.emit(ipcChannels.agentsRuntimeState, { agentId, state }),
-				)
-				.catch(() => undefined);
+				.then((state) => this.emitIdleRuntimeState(agentId, state))
+				.catch(() => this.emitIdleRuntimeState(agentId));
 			// 会话结束时发送系统通知，让用户知道 agent 已完成工作
 			// 只在最后一条消息是 assistant 消息时通知，避免工具调用结束时也触发通知
 			const messages = this.messages.get(agentId) ?? [];
@@ -914,6 +1016,7 @@ export class AgentManager {
 		}
 
 		if (typed.type === "tool_execution_start") {
+			this.bashInputRequests.rememberCommand(agentId, typed);
 			this.upsertToolMessage(agentId, typed, "running");
 			// 工具调用开始时确保 agent 状态为 running，保持 thinking bubble 显示
 			if (runtime) {
@@ -923,6 +1026,7 @@ export class AgentManager {
 		}
 
 		if (typed.type === "tool_execution_end") {
+			this.bashInputRequests.clearToolCall(agentId, typed.toolCallId);
 			this.upsertToolMessage(
 				agentId,
 				typed,
@@ -937,6 +1041,8 @@ export class AgentManager {
 		}
 
 		if (typed.type === "tool_execution_update") {
+			this.bashInputRequests.rememberCommand(agentId, typed);
+			this.bashInputRequests.maybeEmitRequest(agentId, typed);
 			this.upsertToolMessage(agentId, typed, "running");
 		}
 
@@ -946,6 +1052,63 @@ export class AgentManager {
 				"error",
 				String(typed.error ?? "Extension error"),
 			);
+		}
+	}
+
+	private emitIdleRuntimeState(agentId: string, state?: AgentRuntimeState) {
+		this.emit(ipcChannels.agentsRuntimeState, {
+			agentId,
+			state: {
+				...(state ?? {}),
+				isStreaming: false,
+				isCompacting: false,
+			},
+		});
+	}
+
+	private handleServerRequest(
+		agentId: string,
+		request: RpcServerRequest,
+	) {
+		const interactive = isInteractiveServerRequest(request);
+		if (!interactive) {
+			// notify / setStatus / setTitle 这类无响应 UI 事件可能在 agent_end 之后到达；
+			// 它们只更新扩展侧 UI，不代表 Agent 仍在运行，不能把已完成会话重新置为 running。
+			return;
+		}
+		const runtime = this.agents.get(agentId);
+		if (runtime) {
+			runtime.tab.status = "running";
+			this.emitState();
+		}
+		this.trackAndEmitServerRequest(agentId, request);
+	}
+
+	private trackAndEmitServerRequest(agentId: string, request: RpcServerRequest) {
+		const requests = this.pendingServerRequests.get(agentId) ?? new Map<string, RpcServerRequest>();
+		requests.set(String(request.id), request);
+		this.pendingServerRequests.set(agentId, requests);
+		this.emit(ipcChannels.agentsEvent, {
+			agentId,
+			event: {
+				type: "server_request",
+				request: toAgentServerRequest(agentId, request),
+			},
+		});
+	}
+
+	private cancelServerRequest(agentId: string, requestId: string) {
+		const requests = this.pendingServerRequests.get(agentId);
+		const hadRequest = requests?.delete(requestId) === true;
+		if (requests?.size === 0) this.pendingServerRequests.delete(agentId);
+		if (hadRequest) {
+			this.emit(ipcChannels.agentsEvent, {
+				agentId,
+				event: {
+					type: "server_request_cancelled",
+					requestId,
+				},
+			});
 		}
 	}
 

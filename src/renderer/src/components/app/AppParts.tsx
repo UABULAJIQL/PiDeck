@@ -20,7 +20,6 @@ import {
 	Globe2,
 	MessageCircle,
 	Network,
-	Pencil,
 	Pin,
 	Plus,
 	RefreshCw,
@@ -707,34 +706,6 @@ function getHomePathPrefix() {
 	return match?.[1] ?? "C:/Users/14012";
 }
 
-export function EmptyState(props: { hasProject: boolean; onCreate: () => void }) {
-	return (
-		<div className="empty-state">
-			<div className="empty-logo">
-				<svg
-					viewBox="140 140 520 520"
-					width="40"
-					height="40"
-					aria-hidden="true"
-				>
-					<path
-						fill="#fff"
-						fillRule="evenodd"
-						d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-					/>
-					<path fill="#fff" d="M517.36 400H634.72V634.72H517.36Z" />
-				</svg>
-			</div>
-			<h2>{t("app.startAgent")}</h2>
-			<p>{t("app.emptyGuide")}</p>
-			{props.hasProject ? (
-				<button onClick={props.onCreate}>{t("app.createAgent")}</button>
-			) : (
-				<p className="empty-hint">{t("app.emptyNoProject")}</p>
-			)}
-		</div>
-	);
-}
 
 export type ToolGroupItem = {
 	kind: "tool-group";
@@ -1776,7 +1747,7 @@ function MarkdownLink(
  * 只处理 Markdown 链接之外的裸路径，避免把 `[path](file://...)` 二次改写成非法嵌套链接。
  */
 function linkifyFilePaths(text: string): string {
-	const protectedRanges = collectMarkdownLinkRanges(text);
+	const protectedRanges = collectMarkdownProtectedRanges(text);
 	// 支持常见文件路径：Windows 盘符路径、Unix 绝对路径、./ 或 ../ 相对路径、src/file.ts 这类项目相对路径。
 	// 排除 Markdown 控制字符和 URL 常见字符，防止匹配到已有链接语法或普通 http(s) 地址。
 	const filePathRegex = /(?:['"`])?(?:(?:[A-Z]:\\|[A-Z]:\/|\.\.?\/|\/)[^\s<>"'`|?*\n\[\]()]+|(?:[a-zA-Z_][a-zA-Z0-9_-]*[\\/])+[^\s<>"'`|?*\n\[\]()]+)\.[a-zA-Z0-9]+(?:['"`])?/g;
@@ -1785,7 +1756,7 @@ function linkifyFilePaths(text: string): string {
 	for (const match of text.matchAll(filePathRegex)) {
 		const start = match.index ?? 0;
 		const end = start + match[0].length;
-		if (protectedRanges.some((range) => start >= range.start && end <= range.end)) continue;
+		if (overlapsProtectedRange(start, end, protectedRanges)) continue;
 
 		let path = match[0].trim();
 		if (/^['"`]/.test(path)) path = path.slice(1);
@@ -1795,7 +1766,7 @@ function linkifyFilePaths(text: string): string {
 		replacements.push({
 			start,
 			end,
-			value: `[${path}](file://${encodeURIComponent(path)})`,
+			value: `[${path}](file://${encodeFileLinkPath(path)})`,
 		});
 	}
 
@@ -1807,6 +1778,28 @@ function linkifyFilePaths(text: string): string {
 	return result;
 }
 
+/** 生成 file:// 链接时保留路径分隔符，避免裸露链接里出现 src%2Fapp.ts 这类难读的编码。 */
+function encodeFileLinkPath(path: string): string {
+	const normalizedPath = path.replace(/\\/g, "/");
+	return normalizedPath
+		.split("/")
+		.map((part) => (/^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)))
+		.join("/");
+}
+
+/** 收集 Markdown 中不应自动改写的范围，代码块/行内代码里的内容必须保持原文，不能注入链接语法。 */
+function collectMarkdownProtectedRanges(text: string): Array<{ start: number; end: number }> {
+	return mergeRanges([
+		...collectMarkdownLinkRanges(text),
+		...collectMarkdownCodeRanges(text),
+		...collectUrlRanges(text),
+	]);
+}
+
+function overlapsProtectedRange(start: number, end: number, ranges: Array<{ start: number; end: number }>): boolean {
+	return ranges.some((range) => start < range.end && end > range.start);
+}
+
 /** 收集 Markdown inline link 的范围，用于保护已存在链接不被文件路径自动链接逻辑破坏。 */
 function collectMarkdownLinkRanges(text: string): Array<{ start: number; end: number }> {
 	const ranges: Array<{ start: number; end: number }> = [];
@@ -1816,6 +1809,97 @@ function collectMarkdownLinkRanges(text: string): Array<{ start: number; end: nu
 		ranges.push({ start, end: start + match[0].length });
 	}
 	return ranges;
+}
+
+function collectMarkdownCodeRanges(text: string): Array<{ start: number; end: number }> {
+	return mergeRanges([...collectFencedCodeRanges(text), ...collectInlineCodeRanges(text)]);
+}
+
+function collectFencedCodeRanges(text: string): Array<{ start: number; end: number }> {
+	const ranges: Array<{ start: number; end: number }> = [];
+	let openFence: { start: number; markerChar: string; length: number } | null = null;
+	const lineRegex = /[^\n]*(?:\n|$)/g;
+
+	for (const match of text.matchAll(lineRegex)) {
+		const line = match[0];
+		const lineStart = match.index ?? 0;
+		if (!line && lineStart >= text.length) continue;
+
+		const content = line.replace(/\r?\n$/, "");
+		const fenceMatch = content.match(/^(?: {0,3})(`{3,}|~{3,})/);
+		if (!fenceMatch) continue;
+
+		const marker = fenceMatch[1] ?? "";
+		const markerChar = marker[0] ?? "";
+		if (!openFence) {
+			openFence = { start: lineStart, markerChar, length: marker.length };
+			continue;
+		}
+
+		if (markerChar === openFence.markerChar && marker.length >= openFence.length) {
+			ranges.push({ start: openFence.start, end: lineStart + line.length });
+			openFence = null;
+		}
+	}
+
+	if (openFence) ranges.push({ start: openFence.start, end: text.length });
+	return ranges;
+}
+
+function collectInlineCodeRanges(text: string): Array<{ start: number; end: number }> {
+	const ranges: Array<{ start: number; end: number }> = [];
+	let index = 0;
+
+	while (index < text.length) {
+		if (text[index] !== "`") {
+			index += 1;
+			continue;
+		}
+
+		const start = index;
+		let tickCount = 1;
+		while (text[start + tickCount] === "`") tickCount += 1;
+
+		const marker = "`".repeat(tickCount);
+		const end = text.indexOf(marker, start + tickCount);
+		if (end < 0) {
+			index = start + tickCount;
+			continue;
+		}
+
+		ranges.push({ start, end: end + tickCount });
+		index = end + tickCount;
+	}
+
+	return ranges;
+}
+
+function collectUrlRanges(text: string): Array<{ start: number; end: number }> {
+	const ranges: Array<{ start: number; end: number }> = [];
+	const urlRegex = /\b(?:https?:\/\/|file:\/\/)[^\s<>"'`]+/g;
+	for (const match of text.matchAll(urlRegex)) {
+		const start = match.index ?? 0;
+		ranges.push({ start, end: start + match[0].length });
+	}
+	return ranges;
+}
+
+function mergeRanges(ranges: Array<{ start: number; end: number }>): Array<{ start: number; end: number }> {
+	const sortedRanges = ranges
+		.filter((range) => range.end > range.start)
+		.sort((left, right) => left.start - right.start || left.end - right.end);
+	const merged: Array<{ start: number; end: number }> = [];
+
+	for (const range of sortedRanges) {
+		const last = merged[merged.length - 1];
+		if (last && range.start <= last.end) {
+			last.end = Math.max(last.end, range.end);
+		} else {
+			merged.push({ ...range });
+		}
+	}
+
+	return merged;
 }
 
 function extractText(node: ReactNode): string {
@@ -2406,7 +2490,8 @@ function FileNode(props: {
 	depth?: number;
 }) {
 	const { node, expandedDirs, onToggleDirectory, depth = 0 } = props;
-	const expanded = expandedDirs.has(node.path);
+	const directoryKey = node.relativePath || node.path;
+	const expanded = expandedDirs.has(directoryKey);
 	// 每行保持同一个宽度，只通过 CSS 变量控制缩进；避免深层递归容器把最后一层可用宽度越压越窄。
 	const rowStyle = { "--file-depth-offset": `${depth * 16}px` } as CSSProperties;
 	const menu = (event: React.MouseEvent) => {
@@ -2433,7 +2518,7 @@ function FileNode(props: {
 			<button
 				className="directory file-node-row"
 				style={rowStyle}
-				onClick={() => onToggleDirectory(node.path)}
+				onClick={() => onToggleDirectory(directoryKey)}
 				onContextMenu={menu}
 				title={node.relativePath}
 			>
@@ -2927,7 +3012,7 @@ function getBuiltinCommands(): PiCommand[] {
 		source: "builtin",
 	},
 	{ name: "settings", description: t("prompt.command.settings.description"), source: "builtin" },
-	{ name: "reload", description: t("prompt.command.reload.description"), source: "builtin" },
+	{ name: "restart", description: t("prompt.command.restart.description"), source: "builtin" },
 	{ name: "hotkeys", description: t("prompt.command.hotkeys.description"), source: "builtin" },
 	{
 		name: "login",
@@ -3003,6 +3088,30 @@ export function ConfirmDialog(props: {
 	confirmLabel?: string;
 	danger?: boolean;
 }) {
+	const confirmRef = useRef<HTMLButtonElement>(null);
+
+	// 挂载时自动聚焦确认按钮，并监听键盘事件
+	useEffect(() => {
+		const btn = confirmRef.current;
+		// 延迟一帧确保 DOM 已渲染
+		const frame = requestAnimationFrame(() => btn?.focus());
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				e.preventDefault();
+				props.onCancel();
+			} else if (e.key === "Enter") {
+				e.preventDefault();
+				props.onConfirm();
+			}
+		};
+		document.addEventListener("keydown", handleKeyDown);
+		return () => {
+			cancelAnimationFrame(frame);
+			document.removeEventListener("keydown", handleKeyDown);
+		};
+	}, []);
+
 	return (
 		<div className="config-modal-overlay" onClick={props.onCancel}>
 			<div className="config-modal-dialog" onClick={(e) => e.stopPropagation()}>
@@ -3013,6 +3122,7 @@ export function ConfirmDialog(props: {
 						{t("common.cancel")}
 					</button>
 					<button
+						ref={confirmRef}
 						className={`config-btn${props.danger ? " danger" : " primary"}`}
 						onClick={props.onConfirm}
 					>
@@ -3035,7 +3145,6 @@ export function FileContextMenu(props: {
 	onRename?: () => void;
 }) {
 	const isFile = props.menu.node.type === "file";
-	const isDir = props.menu.node.type === "directory";
 	return (
 		<div className="context-backdrop" onClick={props.onClose}>
 			<div
@@ -3410,6 +3519,7 @@ export function SettingsModal(props: {
 											props.onChange({ maxEditorFileSizeMB: mb });
 										}}
 									/>
+
 								</SettingsSection>
 								<SettingsSection title={t("settings.privacy")}>
 									<SettingSwitch

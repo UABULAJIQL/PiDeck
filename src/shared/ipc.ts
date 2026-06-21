@@ -48,6 +48,8 @@ export const ipcChannels = {
 	appWindowToggleMaximize: "app:window-toggle-maximize",
 	appWindowToggleAlwaysOnTop: "app:window-toggle-always-on-top",
 	appWindowClose: "app:window-close",
+	appWindowGetMaximized: "app:window-get-maximized",
+	appWindowMaximizeChanged: "app:window-maximize-changed",
 	agentsList: "agents:list",
 	agentsCreate: "agents:create",
 	agentsRename: "agents:rename",
@@ -59,7 +61,6 @@ export const ipcChannels = {
 	agentsForkSession: "agents:fork-session",
 	agentsCloneSession: "agents:clone-session",
 	agentsSwitchSession: "agents:switch-session",
-	agentsReload: "agents:reload",
 	agentsRestart: "agents:restart",
 	agentsCompact: "agents:compact",
 	agentsRuntimeState: "agents:runtime-state",
@@ -70,6 +71,7 @@ export const ipcChannels = {
 	agentsSetThinking: "agents:set-thinking",
 	agentsState: "agents:state",
 	agentsEvent: "agents:event",
+	agentsRespondServerRequest: "agents:respond-server-request",
 	agentsMessage: "agents:message",
 	agentsLog: "agents:log",
 
@@ -92,6 +94,9 @@ export const ipcChannels = {
 
 	/** 切换开发者控制台 */
 	appToggleDevTools: "app:toggle-devtools",
+
+	/** 使用 VS Code 打开项目目录 */
+	appOpenInVSCode: "app:open-in-vscode",
 
 	/** RPC 日志，用于调试 */
 	agentsRpcLog: "agents:rpc-log",

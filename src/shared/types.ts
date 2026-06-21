@@ -180,6 +180,20 @@ export type SendShortcutMode =
 	| "ctrl-enter-send"
 	| "shift-enter-send";
 
+/** 可持久化的窗口位置和尺寸（非最大化状态下的常规边界） */
+export type AppWindowBounds = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+
+/** 可持久化的窗口状态，用于启动时恢复位置、尺寸和最大化状态 */
+export type AppWindowState = {
+	bounds?: AppWindowBounds;
+	maximized?: boolean;
+};
+
 export type AppThemeMode = "system" | "light" | "dark";
 export type AppLanguageMode = "system" | "zh-CN" | "en-US" | "pseudo";
 export type LinkOpenMode = "external" | "internal";
@@ -235,6 +249,11 @@ export type AppSettings = {
 	linkOpenMode: LinkOpenMode;
 	/** 编辑器最大文件大小（MB），超过此大小的文件不加载编辑器。默认 5MB。 */
 	maxEditorFileSizeMB: number;
+	/** 每次新会话的第一条消息自动携带的前缀内容，按 provider 名存储 */
+	providerPrefixes: Record<string, string>;
+
+	/** 上次退出时的窗口位置、尺寸和最大化状态，用于启动时恢复 */
+	windowState?: AppWindowState;
 };
 
 export type PiInstallStatus = {
@@ -398,6 +417,18 @@ export type ThinkingUpdate = {
 	agentId: string;
 	/** 累积的思考文本 */
 	thinking: string;
+};
+
+export type AgentServerRequest = {
+	agentId: string;
+	requestId: string | number;
+	type?: string;
+	method: string;
+	params?: unknown;
+	title?: string;
+	message?: string;
+	options?: string[];
+	timeout?: number;
 };
 
 // ===== 飞书桥接类型 =====

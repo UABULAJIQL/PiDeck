@@ -16,7 +16,7 @@ import type {
 	ModelsFile,
 	SettingsFile,
 } from "./config/configTypes";
-import type { ConfigFileDiagnostic, PiExtensionListResult, PiExtensionSummary, PiSkillListResult, PiSkillLocation, PiSkillSummary } from "../../shared/types";
+import type { AppSettings, ConfigFileDiagnostic, PiExtensionListResult, PiExtensionSummary, PiSkillListResult, PiSkillLocation, PiSkillSummary } from "../../shared/types";
 import { getProviderHeaders } from "./config/providerHeaders";
 
 const api: PiDesktopApi = (window as unknown as { piDesktop: PiDesktopApi })
@@ -102,6 +102,8 @@ type ConfigModalProps = {
 	open: boolean;
 	onClose: () => void;
 	onSaved: () => void;
+	settings: AppSettings;
+	onSettingsChange: (patch: Partial<AppSettings>) => void;
 };
 
 class ConfigModalErrorBoundary extends Component<
@@ -165,7 +167,7 @@ export function ConfigModal(props: ConfigModalProps) {
 }
 
 function ConfigModalContent(props: ConfigModalProps) {
-	const { open, onClose, onSaved } = props;
+	const { open, onClose, onSaved, settings, onSettingsChange } = props;
 	const [section, setSection] = useState<"config" | "skills" | "extensions" | "im">("config");
 	const [tab, setTab] = useState<ConfigTab>("models");
 	const [loading, setLoading] = useState(false);
@@ -956,6 +958,8 @@ function ConfigModalContent(props: ConfigModalProps) {
 							testResult={testResult}
 							testModelIdByProvider={testModelIdByProvider}
 							saving={saving}
+							settings={settings}
+							onSettingsChange={onSettingsChange}
 							onToggleProvider={(name) =>
 								setExpandedProvider(expandedProvider === name ? null : name)
 							}

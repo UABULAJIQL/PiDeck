@@ -5,11 +5,12 @@ import {
 	Menu,
 	nativeImage,
 	net,
+	screen,
 	shell,
 	Tray,
 } from "electron";
-import { join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { is } from "@electron-toolkit/utils";
 // 使用 ?asset 后缀导入图标，electron-vite 会在构建时将其复制到输出目录并提供正确的运行时路径
 // 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题
@@ -29,6 +30,7 @@ import type {
 	AppSettings,
 	AppUpdateAsset,
 	AppUpdateInfo,
+	AppWindowBounds,
 	CreateAgentInput,
 	FeishuBotConfig,
 	FeishuBridgeStatus,
@@ -407,16 +409,99 @@ function printStartupInfo() {
 	`);
 }
 
+/**
+ * 验证保存的窗口边界是否合法且至少部分可见。
+ * 如果边界无效或完全位于所有显示器之外，返回 null 让调用方使用默认值。
+ */
+function validateWindowBounds(
+	bounds: AppWindowBounds | undefined,
+): AppWindowBounds | null {
+	if (!bounds) return null;
+	const { x, y, width, height } = bounds;
+	// 基础合法性检查：正有限数且不小于 100px（具体 minWidth/minHeight 在构造函数中保障）
+	if (
+		!Number.isFinite(x) ||
+		!Number.isFinite(y) ||
+		!Number.isFinite(width) ||
+		!Number.isFinite(height) ||
+		width < 100 ||
+		height < 100
+	) {
+		return null;
+	}
+	// 检查是否有至少 50px 落在任意显示器的工作区内，避免显示器移除后窗口在屏幕外恢复
+	const displays = screen.getAllDisplays();
+	const testRect = { x, y, width: Math.min(width, 50), height: Math.min(height, 50) };
+	const onScreen = displays.some((display) => {
+		const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+		return (
+			testRect.x < dx + dw &&
+			testRect.x + testRect.width > dx &&
+			testRect.y < dy + dh &&
+			testRect.y + testRect.height > dy
+		);
+	});
+	if (!onScreen) return null;
+	return { x, y, width, height };
+}
+
+/** 窗口状态保存防抖（ms），避免频繁 resize/move 触发大量磁盘写入 */
+const WINDOW_STATE_SAVE_DEBOUNCE_MS = 500;
+let windowStateSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 立即保存当前窗口状态到持久化存储 */
+async function saveMainWindowStateNow(): Promise<void> {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (mainWindow.isMinimized()) return;
+	if (windowStateSaveTimer) {
+		clearTimeout(windowStateSaveTimer);
+		windowStateSaveTimer = null;
+	}
+	try {
+		const bounds = mainWindow.getNormalBounds();
+		await settingsStore.updateWindowState({
+			bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+			maximized: mainWindow.isMaximized(),
+		});
+	} catch (error) {
+		console.warn("[窗口] 保存状态失败:", error);
+	}
+}
+
+function scheduleSaveMainWindowState() {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (mainWindow.isMinimized()) return;
+	if (windowStateSaveTimer) clearTimeout(windowStateSaveTimer);
+	windowStateSaveTimer = setTimeout(() => {
+		windowStateSaveTimer = null;
+		void saveMainWindowStateNow();
+	}, WINDOW_STATE_SAVE_DEBOUNCE_MS);
+}
+
 function createWindow() {
 	const windowOptions = settingsStore.createWindowOptions();
+	const savedWindowState = settingsStore.get().windowState;
+	const defaultWidth = 1480;
+	const defaultHeight = 960;
+	const minWidth = 1180;
+	const minHeight = 840;
+
+	// 从已保存的窗口状态恢复位置和尺寸，回退到默认值
+	const savedBounds = validateWindowBounds(savedWindowState?.bounds);
+	const initialWidth = Math.max(minWidth, savedBounds?.width ?? defaultWidth);
+	const initialHeight = Math.max(minHeight, savedBounds?.height ?? defaultHeight);
+	const windowX = savedBounds?.x;
+	const windowY = savedBounds?.y;
 
 	mainWindow = new BrowserWindow({
 		show: false,
 		backgroundColor: "#eef0f3",
-		width: 1480,
-		height: 960,
-		minWidth: 1180,
-		minHeight: 840,
+		x: windowX,
+		y: windowY,
+		width: initialWidth,
+		height: initialHeight,
+		minWidth,
+		minHeight,
 		title: "",
 		icon: iconPath,
 		frame: windowOptions.frame,
@@ -437,15 +522,35 @@ function createWindow() {
 	});
 
 	mainWindow.once("ready-to-show", () => {
+		// 有已保存的最大化状态则恢复；首次启动（无保存状态）也默认最大化
+		const shouldMaximize = savedWindowState?.maximized ?? !savedBounds;
+		if (shouldMaximize) {
+			mainWindow?.maximize();
+		}
 		mainWindow?.show();
-		// 窗口显示后立即最大化，提供更好的默认工作空间
-		mainWindow?.maximize();
 		// 向开发者工具输出启动信息
 		printStartupInfo();
 	});
 
-	// 关闭窗口时根据设置决定：隐藏到托盘还是正常退出
+	// 窗口尺寸/位置变化时持久化状态（包含最大化/恢复）
+	mainWindow.on("resize", scheduleSaveMainWindowState);
+	mainWindow.on("move", scheduleSaveMainWindowState);
+
+	// 监听窗口最大化/恢复事件，通知渲染进程更新图标并保存状态
+	mainWindow.on("maximize", () => {
+		mainWindow?.webContents.send(ipcChannels.appWindowMaximizeChanged, true);
+		scheduleSaveMainWindowState();
+	});
+	mainWindow.on("unmaximize", () => {
+		mainWindow?.webContents.send(ipcChannels.appWindowMaximizeChanged, false);
+		scheduleSaveMainWindowState();
+	});
+
+	// 关闭窗口前保存最新状态，然后根据设置决定：隐藏到托盘还是正常退出
 	mainWindow.on("close", (event) => {
+		// 关闭前立即刷一次状态，确保最后的位置被保存（跳过防抖）
+		void saveMainWindowStateNow();
+
 		if (!isQuitting && settingsStore.get().closeToTray) {
 			event.preventDefault();
 			mainWindow?.hide();
@@ -877,6 +982,33 @@ function registerIpc() {
 		// 外部链接统一经主进程打开，避免 renderer 直接依赖 shell 权限，并遵守用户设置的打开方式。
 		await openExternalUrl(url);
 	});
+	ipcMain.handle(ipcChannels.appOpenInVSCode, async (_event, projectPath: string) => {
+		if (typeof projectPath !== "string" || !projectPath.trim()) {
+			throw new Error("项目路径为空");
+		}
+		const resolvedPath = resolve(projectPath);
+		const info = await stat(resolvedPath).catch(() => null);
+		if (!info?.isDirectory()) {
+			throw new Error(`项目目录不存在：${resolvedPath}`);
+		}
+		// 使用 VS Code 的 vscode:// URI 协议打开目录
+		const vscodeUri = toVSCodeFileUri(resolvedPath);
+		await shell.openExternal(vscodeUri);
+	});
+
+/** 将本地路径转为 vscode://file/ URI，正确处理 Windows 盘符和特殊字符 */
+function toVSCodeFileUri(targetPath: string): string {
+	const normalized = targetPath.replace(/\\/g, "/");
+	const encoded = normalized
+		.split("/")
+		.map((segment, index) =>
+			index === 0 && /^[A-Za-z]:$/.test(segment)
+				? segment
+				: encodeURIComponent(segment),
+		)
+		.join("/");
+	return `vscode://file/${encoded}`;
+}
 	ipcMain.handle(ipcChannels.appRestart, async () => {
 		// 标记为退出状态，避免 closeToTray 阻止重启
 		isQuitting = true;
@@ -897,6 +1029,10 @@ function registerIpc() {
 		if (mainWindow.isMaximized()) mainWindow.unmaximize();
 		else mainWindow.maximize();
 	});
+	ipcMain.handle(ipcChannels.appWindowGetMaximized, () => {
+		return mainWindow?.isMaximized() ?? false;
+	});
+
 	ipcMain.handle(ipcChannels.appWindowToggleAlwaysOnTop, () => {
 		if (!mainWindow || mainWindow.isDestroyed()) return false;
 		const next = !mainWindow.isAlwaysOnTop();
@@ -1026,6 +1162,11 @@ function registerIpc() {
 		}
 		return agentManager.abort(agentId);
 	});
+	ipcMain.handle(
+		ipcChannels.agentsRespondServerRequest,
+		(_event, agentId: string, requestId: string | number, decision: unknown) =>
+			agentManager.respondServerRequest(agentId, requestId, decision),
+	);
 	ipcMain.handle(ipcChannels.agentsExportHtml, (_event, agentId: string) =>
 		agentManager.exportHtml(agentId),
 	);
@@ -1044,9 +1185,6 @@ function registerIpc() {
 		ipcChannels.agentsSwitchSession,
 		(_event, agentId: string, sessionPath: string) =>
 			agentManager.switchSession(agentId, sessionPath),
-	);
-	ipcMain.handle(ipcChannels.agentsReload, (_event, agentId: string) =>
-		agentManager.reload(agentId),
 	);
 	ipcMain.handle(ipcChannels.agentsRestart, async (_event, agentId: string) => {
 		terminalManager.closeAgent(agentId);

@@ -17,6 +17,17 @@ type PendingRequest = {
   timer: NodeJS.Timeout;
 };
 
+export type RpcServerRequest = {
+  id: string | number;
+  type?: string;
+  method: string;
+  params?: unknown;
+  title?: string;
+  message?: string;
+  options?: string[];
+  timeout?: number;
+};
+
 export class PiRpcClient extends EventEmitter {
   private buffer = "";
   private readonly decoder = new StringDecoder("utf8");
@@ -50,6 +61,15 @@ export class PiRpcClient extends EventEmitter {
 
   notify(command: Record<string, unknown>) {
     this.write(command);
+  }
+
+  respond(id: string | number, result: unknown, protocol: "extension-ui" | "json-rpc" = "json-rpc") {
+    if (protocol === "extension-ui") {
+      // pi 扩展 UI 在 RPC 模式下使用 extension_ui_response 子协议，而不是 JSON-RPC result。
+      this.write({ type: "extension_ui_response", id, ...(result as Record<string, unknown>) });
+      return;
+    }
+    this.write({ jsonrpc: "2.0", id, result });
   }
 
   close(error?: Error) {
@@ -115,10 +135,25 @@ export class PiRpcClient extends EventEmitter {
       return;
     }
 
+    if (this.isServerRequest(message)) {
+      this.emit("server-request", message);
+      return;
+    }
+
     this.emit("event", message);
   }
 
   private isResponse(value: unknown): value is RpcResponse {
     return Boolean(value && typeof value === "object" && (value as { type?: unknown }).type === "response");
+  }
+
+  private isServerRequest(value: unknown): value is RpcServerRequest {
+    if (!value || typeof value !== "object") return false;
+    if (this.isResponse(value)) return false;
+    const message = value as { method?: unknown; id?: unknown };
+    // 扩展 UI 和工具审批都可能表现为带 id+method 的服务端请求；
+    // 不再按 type 收窄，避免真实审批停在活动轨迹“需要审批”但不进入弹窗链路。
+    return typeof message.method === "string" &&
+      (typeof message.id === "string" || typeof message.id === "number");
   }
 }

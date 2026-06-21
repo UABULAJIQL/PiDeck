@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import type { AppSettings, PiExtensionListResult, PiExtensionSummary } from "../../shared/types";
 import type { PiLocator } from "../pi/PiLocator";
 
@@ -40,29 +40,85 @@ export class ExtensionManager {
 		const command = this.locator.resolveCommand(this.getSettings().customPiPath);
 		const invocation = this.locator.createInvocation(command, args);
 		return new Promise<string>((resolve, reject) => {
-			execFile(
-				invocation.command,
-				invocation.args,
-				{
-					env: {
-						...this.locator.createProcessEnv(this.getSettings(), invocation.pathPrefix),
-						PI_OFFLINE: "1",
-					},
-					shell: invocation.shell,
-					windowsHide: true,
-					timeout,
-					encoding: "utf8",
-					windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+			let stdout = "";
+			let stderr = "";
+			let timedOut = false;
+			let settled = false;
+
+			const child = spawn(invocation.command, invocation.args, {
+				env: {
+					...this.locator.createProcessEnv(this.getSettings(), invocation.pathPrefix),
+					// 设置页扩展管理必须保持非交互，避免后台 CLI 等输入导致桌面端卡住。
+					CI: "1",
+					NO_COLOR: "1",
+					npm_config_yes: "true",
+					npm_config_audit: "false",
+					npm_config_fund: "false",
+					PI_OFFLINE: "1",
 				},
-				(error, stdout, stderr) => {
-					if (error) {
-						const detail = (stderr || error.message).trim();
-						reject(new Error(detail || "pi 扩展命令执行失败"));
-						return;
-					}
-					resolve(stdout);
-				},
-			);
+				shell: invocation.shell,
+				windowsHide: true,
+				stdio: ["ignore", "pipe", "pipe"],
+				windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+			});
+
+			const capOutput = (current: string, chunk: Buffer) => {
+				const next = current + chunk.toString("utf8");
+				return next.length > 20_000 ? next.slice(-20_000) : next;
+			};
+
+			child.stdout?.on("data", (chunk: Buffer) => {
+				stdout = capOutput(stdout, chunk);
+			});
+			child.stderr?.on("data", (chunk: Buffer) => {
+				stderr = capOutput(stderr, chunk);
+			});
+
+			const finish = (error?: Error, output = stdout) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				if (error) {
+					reject(error);
+					return;
+				}
+				resolve(output);
+			};
+
+			const killProcessTree = () => {
+				if (!child.pid) return;
+				if (process.platform === "win32") {
+					spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+						windowsHide: true,
+						stdio: "ignore",
+					});
+					return;
+				}
+				child.kill("SIGKILL");
+			};
+
+			const timer = setTimeout(() => {
+				timedOut = true;
+				killProcessTree();
+			}, timeout);
+
+			child.on("error", (error) => {
+				finish(new Error(error.message || "pi 扩展命令启动失败"));
+			});
+
+			child.on("close", (code, signal) => {
+				if (timedOut) {
+					const detail = (stderr || stdout).trim();
+					finish(new Error(`pi 扩展命令超时${detail ? `：${detail}` : ""}`));
+					return;
+				}
+				if (code !== 0) {
+					const detail = (stderr || stdout || signal || `退出码 ${code}`).toString().trim();
+					finish(new Error(detail || "pi 扩展命令执行失败"));
+					return;
+				}
+				finish(undefined, stdout);
+			});
 		});
 	}
 

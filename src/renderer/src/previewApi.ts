@@ -142,6 +142,7 @@ let previewSettings: AppSettings = {
 	rpcTimeout: 600_000,
 	linkOpenMode: "external",
 	maxEditorFileSizeMB: 5,
+	providerPrefixes: {} as Record<string, string>,
 };
 
 export function createPreviewApi(): PiDesktopApi {
@@ -266,7 +267,10 @@ export function createPreviewApi(): PiDesktopApi {
 			toggleMaximizeWindow: async () => undefined,
 			toggleAlwaysOnTopWindow: async () => false,
 			closeWindow: async () => undefined,
+			getWindowMaximized: async () => false,
+			onWindowMaximizeChanged: () => () => undefined,
 			toggleDevTools: async () => false,
+			openInVSCode: async () => undefined,
 		},
 		skills: {
 			list: async () => ({
@@ -394,7 +398,6 @@ export function createPreviewApi(): PiDesktopApi {
 			forkSession: async () => ({ text: "Preview prompt", cancelled: false }),
 			cloneSession: async () => ({ cancelled: false }),
 			switchSession: async () => ({ cancelled: false }),
-			reload: async () => undefined,
 			restart: async (agentId: string) => ({
 				id: agentId,
 				projectId: "preview",
@@ -442,8 +445,10 @@ export function createPreviewApi(): PiDesktopApi {
 				modelName: "Preview GPT",
 				thinkingLevel: level,
 			}),
+			onEvent: noop,
+			respondServerRequest: async () => undefined,
 			commands: async () => [
-				{ name: "reload", description: "Reload runtime", source: "builtin" },
+				{ name: "restart", description: "Restart runtime", source: "builtin" },
 			],
 			onState: noop,
 			onMessages: ((

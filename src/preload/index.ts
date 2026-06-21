@@ -179,6 +179,8 @@ const api = {
 		restart: () => ipcRenderer.invoke(ipcChannels.appRestart) as Promise<void>,
 		minimizeWindow: () =>
 			ipcRenderer.invoke(ipcChannels.appWindowMinimize) as Promise<void>,
+		getWindowMaximized: () =>
+			ipcRenderer.invoke(ipcChannels.appWindowGetMaximized) as Promise<boolean>,
 		toggleMaximizeWindow: () =>
 			ipcRenderer.invoke(ipcChannels.appWindowToggleMaximize) as Promise<void>,
 		toggleAlwaysOnTopWindow: () =>
@@ -187,8 +189,12 @@ const api = {
 			) as Promise<boolean>,
 		closeWindow: () =>
 			ipcRenderer.invoke(ipcChannels.appWindowClose) as Promise<void>,
+		onWindowMaximizeChanged: (callback: (maximized: boolean) => void) =>
+			subscribe(ipcChannels.appWindowMaximizeChanged, callback),
 		toggleDevTools: () =>
 			ipcRenderer.invoke(ipcChannels.appToggleDevTools) as Promise<boolean>,
+		openInVSCode: (projectPath: string) =>
+			ipcRenderer.invoke(ipcChannels.appOpenInVSCode, projectPath) as Promise<void>,
 	},
 	skills: {
 		list: () =>
@@ -349,8 +355,6 @@ const api = {
 				agentId,
 				sessionPath,
 			) as Promise<{ cancelled?: boolean }>,
-		reload: (agentId: string) =>
-			ipcRenderer.invoke(ipcChannels.agentsReload, agentId) as Promise<void>,
 		restart: (agentId: string) =>
 			ipcRenderer.invoke(
 				ipcChannels.agentsRestart,
@@ -400,6 +404,20 @@ const api = {
 		onMessages: (
 			callback: (payload: { agentId: string; messages: ChatMessage[] }) => void,
 		) => subscribe(ipcChannels.agentsMessage, callback),
+		onEvent: (
+			callback: (payload: { agentId: string; event: unknown }) => void,
+		) => subscribe(ipcChannels.agentsEvent, callback),
+		respondServerRequest: (
+			agentId: string,
+			requestId: string | number,
+			decision: unknown,
+		) =>
+			ipcRenderer.invoke(
+				ipcChannels.agentsRespondServerRequest,
+				agentId,
+				requestId,
+				decision,
+			) as Promise<void>,
 		onLog: (callback: (payload: { agentId: string; text: string }) => void) =>
 			subscribe(ipcChannels.agentsLog, callback),
 		onThinking: (

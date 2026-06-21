@@ -172,6 +172,10 @@ export function createBrowserApi(): PiDesktopApi {
 			},
 			onState: (callback) => subscribe(stateListeners, callback),
 			onMessages: (callback) => subscribe(messageListeners, callback),
+			onEvent: () => () => undefined,
+			respondServerRequest: async () => {
+				throw new Error("Web service mode does not support approval requests yet.");
+			},
 		},
 		settings: {
 			...base.settings,
