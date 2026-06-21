@@ -4,6 +4,7 @@ import { t } from "./i18n";
 export type ApprovalOption = {
   key: string;
   label: string;
+  description?: string;
   response: Record<string, unknown>;
   danger?: boolean;
 };
@@ -12,6 +13,11 @@ export type ApprovalViewModel = {
   title: string;
   message: string;
   options: ApprovalOption[];
+  mode?: "actions" | "select";
+  filterPlaceholder?: string;
+  emptyLabel?: string;
+  helperText?: string;
+  cancelResponse?: Record<string, unknown>;
 };
 
 /**
@@ -68,8 +74,13 @@ export function describeApprovalRequest(request: AgentServerRequest): ApprovalVi
       return {
         title: request.title ?? t("approval.title"),
         message: request.message ?? t("approval.genericMessage"),
-        options: options.map((option) => ({
-          key: `select-${option}`,
+        mode: "select",
+        filterPlaceholder: t("approval.selectFilterPlaceholder"),
+        emptyLabel: t("approval.selectNoMatches"),
+        helperText: t("approval.selectKeyboardHint"),
+        cancelResponse: { cancelled: true },
+        options: options.map((option, index) => ({
+          key: `select-${index}-${option}`,
           label: option,
           response: { value: option },
         })),

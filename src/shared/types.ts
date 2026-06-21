@@ -334,6 +334,23 @@ export type PiExtensionListResult = {
 	raw: string;
 };
 
+export type PiPackageUpdateInfo = {
+	source: string;
+	displayName: string;
+	currentVersion?: string;
+	latestVersion?: string;
+	scope: PiExtensionSummary["scope"];
+};
+
+export type PiUpdateNoticeInfo = {
+	currentVersion?: string;
+	latestVersion?: string;
+	hasCoreUpdate: boolean;
+	changelogUrl: string;
+	packageUpdates: PiPackageUpdateInfo[];
+	checkedAt: number;
+};
+
 export type PiProxyTestResult = {
 	success: boolean;
 	url: string;

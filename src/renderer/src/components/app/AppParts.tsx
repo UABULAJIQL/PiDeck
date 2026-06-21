@@ -2893,6 +2893,8 @@ export type SuggestionItem = {
 	label: string;
 	description: string;
 	value: string;
+	kind: "command" | "file";
+	source?: PiCommand["source"];
 };
 
 export function buildSuggestionItems(
@@ -2918,6 +2920,8 @@ export function buildSuggestionItems(
 				label: `/${command.name}`,
 				description: command.description ?? "",
 				value: `/${command.name}`,
+				kind: "command" as const,
+				source: command.source,
 			}));
 	}
 	if (tail.startsWith("@")) {
@@ -2937,6 +2941,7 @@ export function buildSuggestionItems(
 				label: `@${item.file.name}`,
 				description: item.file.relativePath,
 				value: `@${item.file.relativePath}`,
+				kind: "file" as const,
 			}));
 	}
 	return [];

@@ -39,6 +39,7 @@ export const ipcChannels = {
 	gitChangedFiles: "git:changed-files",
 	piCheck: "pi:check",
 	piCheckCustom: "pi:check-custom",
+	piCheckUpdates: "pi:check-updates",
 	appInfo: "app:info",
 	appCheckUpdate: "app:check-update",
 	appFeedbackEnvironment: "app:feedback-environment",

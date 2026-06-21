@@ -31,6 +31,7 @@ import { createBrowserApi } from "./browserApi";
 import { describeApprovalRequest } from "./approvalRequest";
 import { ConfigModal } from "./ConfigModal";
 import { ApprovalDialog } from "./components/app/ApprovalDialog";
+import { PiUpdateNotice } from "./components/app/PiUpdateNotice";
 import { SlashCommandStagePanel } from "./components/app/SlashCommandStagePanel";
 import { TerminalDock } from "./components/terminal/TerminalDock";
 import { CloseIconButton } from "./components/ui/IconButton";
@@ -121,6 +122,7 @@ import type {
   ImageContent,
   PiCommand,
   PiInstallStatus,
+  PiUpdateNoticeInfo,
   Project,
   SessionSummary,
   ThinkingUpdate,
@@ -445,6 +447,8 @@ export function App() {
   const [sessionHistoryLoading, setSessionHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [piUpdateNotice, setPiUpdateNotice] = useState<PiUpdateNoticeInfo | null>(null);
+  const [piUpdateDismissedAt, setPiUpdateDismissedAt] = useState<number | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [upToDateVersion, setUpToDateVersion] = useState<string | null>(null);
@@ -1078,11 +1082,12 @@ export function App() {
   }, [projectIdsKey]);
 
   useEffect(() => {
-    const timer = window.setInterval(
-      () => void checkAppUpdate("auto"),
-      1000 * 60 * 60 * 6,
-    );
-    window.setTimeout(() => void checkAppUpdate("auto"), 5000);
+    const runUpdateChecks = () => {
+      void checkAppUpdate("auto");
+      void checkPiUpdateNotice();
+    };
+    const timer = window.setInterval(runUpdateChecks, 1000 * 60 * 60 * 6);
+    window.setTimeout(runUpdateChecks, 5000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -1693,6 +1698,31 @@ export function App() {
       setUpdateChecking(false);
     }
   }
+
+  async function checkPiUpdateNotice() {
+    try {
+      const next = await api.pi.checkUpdates();
+      setPiUpdateNotice(
+        next.hasCoreUpdate || next.packageUpdates.length > 0 ? next : null,
+      );
+    } catch {
+      // pi 更新提醒是启动辅助信息，网络/registry/本地环境异常时静默跳过，避免干扰会话启动。
+    }
+  }
+
+  async function copyPiUpdateCommand(command: string) {
+    await navigator.clipboard.writeText(command);
+    showToast(t("piUpdate.commandCopied", { command }), 1800);
+  }
+
+  function dismissPiUpdateNotice() {
+    setPiUpdateDismissedAt(piUpdateNotice?.checkedAt ?? Date.now());
+  }
+
+  const visiblePiUpdateNotice =
+    piUpdateNotice && piUpdateDismissedAt !== piUpdateNotice.checkedAt
+      ? piUpdateNotice
+      : null;
 
   async function refreshProjects() {
     const next = await api.projects.list();
@@ -2699,6 +2729,30 @@ export function App() {
           suggestionItems[
             Math.min(selectedSuggestionIndex, suggestionItems.length - 1)
           ];
+        const suggestionEnterIntent = getComposerEnterIntent(
+          event,
+          settings.sendShortcut,
+        );
+        const stagedSuggestion = selected
+          ? getSlashStageCommand(selected.value)
+          : undefined;
+        const shouldRunSelectedCommand =
+          suggestionEnterIntent === "send" &&
+          selected?.kind === "command" &&
+          (selected.source === "extension" || Boolean(stagedSuggestion));
+
+        if (selected && shouldRunSelectedCommand) {
+          setSuggestionsOpen(false);
+          setSlashCommandStage(null);
+          if (stagedSuggestion) {
+            void openSlashCommandStage(stagedSuggestion, selected.value);
+          } else {
+            // 选择扩展 slash 命令时直接提交命令快照，不先写入输入框，避免 `/advisor` 被显示成普通消息。
+            void submitComposerPrompt(selected.value);
+          }
+          return;
+        }
+
         if (selected) {
           setPrompt((current) => applySuggestion(current, selected.value));
           setSuggestionsOpen(false);
@@ -2714,15 +2768,13 @@ export function App() {
       }
     }
 
-    // 历史命令导航:只在光标位于第一行时生效
+    // 历史命令导航:只在光标位于输入末尾时生效
     const textarea = event.currentTarget;
-    const cursorPos = textarea.selectionStart;
-    const textBeforeCursor = textarea.value.substring(0, cursorPos);
-    const isFirstLine = !textBeforeCursor.includes('\n');
-    const textAfterCursor = textarea.value.substring(cursorPos);
-    const isLastLine = !textAfterCursor.includes('\n');
+    const isCursorAtEnd =
+      textarea.selectionStart === textarea.value.length &&
+      textarea.selectionEnd === textarea.value.length;
 
-    if (event.key === "ArrowUp" && isFirstLine && commandHistory.length > 0) {
+    if (event.key === "ArrowUp" && isCursorAtEnd && commandHistory.length > 0) {
       event.preventDefault();
 
       // 首次导航时保存当前输入
@@ -2743,7 +2795,7 @@ export function App() {
       return;
     }
 
-    if (event.key === "ArrowDown" && isLastLine && historyNavigating) {
+    if (event.key === "ArrowDown" && isCursorAtEnd && historyNavigating) {
       event.preventDefault();
 
       if (historyIndex > 0) {
@@ -2852,14 +2904,17 @@ ${text}
   }, [isAgentBusy, activeAgentId, api.agents]);
 
   async function sendPrompt() {
+    const images = attachedImages.length > 0 ? attachedImages : undefined;
+    await submitComposerPrompt(prompt, images);
+  }
+
+  async function submitComposerPrompt(message: string, images?: ImageContent[]) {
     if (
       isAgentStarting ||
       !activeAgentId ||
-      (!prompt.trim() && attachedImages.length === 0)
+      (!message.trim() && !images?.length)
     )
       return;
-    const message = prompt;
-    const images = attachedImages.length > 0 ? attachedImages : undefined;
 
     const finalMessage = applyFirstMessagePrefix(message);
 
@@ -3031,7 +3086,11 @@ ${goalTextRef.current}
     // 这里接收快照参数,让 composer 发送和历史消息"重新发送"共享同一条路径。
     // Agent 忙碌时显式使用官方 streamingBehavior=steer:消息会进入 pi 的运行中队列,
     // 而不是留在 desktop 本地等整个 agent idle 后再发送。
-    const behavior = streamingBehavior ?? (isAgentBusy ? "steer" : undefined);
+    // Slash 扩展命令必须走普通 RPC prompt，pi 才会执行命令展开并发出 extension_ui_request；
+    // streamingBehavior=steer 会把它当运行中消息注入，导致 `/advisor` 这类命令变成普通文本发送。
+    const isSlashCommandPrompt = message.trimStart().startsWith("/");
+    const behavior =
+      streamingBehavior ?? (isAgentBusy && !isSlashCommandPrompt ? "steer" : undefined);
     await api.agents.prompt({
       agentId,
       message,
@@ -3335,6 +3394,7 @@ ${goalTextRef.current}
       await api.app.openInVSCode(currentProjectPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error("[VSCode] renderer openInVSCode rejected", error);
       showToast(t("app.openInVSCodeFailed", { error: message }));
     }
   }
@@ -4123,6 +4183,15 @@ ${goalTextRef.current}
         </header>
 
         <section className="message-timeline" ref={timelineRef}>
+          {visiblePiUpdateNotice && (
+            <PiUpdateNotice
+              notice={visiblePiUpdateNotice}
+              onCopyCommand={copyPiUpdateCommand}
+              onOpenChangelog={() => api.app.openExternal(visiblePiUpdateNotice.changelogUrl)}
+              onDismiss={dismissPiUpdateNotice}
+            />
+          )}
+
           {/* 加载更多历史消息按钮 */}
           {hasMoreMessages && activeAgent && activeAgent.status !== "starting" && (
             <div style={{
@@ -4944,6 +5013,11 @@ ${goalTextRef.current}
             title={approvalUi.title}
             message={approvalUi.message}
             options={approvalUi.options}
+            mode={approvalUi.mode}
+            filterPlaceholder={approvalUi.filterPlaceholder}
+            emptyLabel={approvalUi.emptyLabel}
+            helperText={approvalUi.helperText}
+            cancelResponse={approvalUi.cancelResponse}
             busy={approvalBusy}
             onSelect={(response) => void respondApproval(response as Record<string, unknown>)}
           />

@@ -232,6 +232,14 @@ export function createPreviewApi(): PiDesktopApi {
 				version: "preview",
 				searchedDirs: [],
 			}),
+			checkUpdates: async () => ({
+				currentVersion: "preview",
+				latestVersion: "preview",
+				hasCoreUpdate: false,
+				changelogUrl: "https://pi.dev/changelog",
+				packageUpdates: [],
+				checkedAt: Date.now(),
+			}),
 		},
 		app: {
 			info: async () => ({

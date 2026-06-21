@@ -11,6 +11,7 @@ import {
 } from "electron";
 import { join, resolve } from "node:path";
 import { readFile, stat, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { is } from "@electron-toolkit/utils";
 // 使用 ?asset 后缀导入图标，electron-vite 会在构建时将其复制到输出目录并提供正确的运行时路径
 // 这解决了打包后 build/ 目录不在 asar 中导致托盘图标丢失的问题
@@ -28,8 +29,6 @@ process.stderr.on("error", (err: NodeJS.ErrnoException) => {
 import { ipcChannels } from "../shared/ipc";
 import type {
 	AppSettings,
-	AppUpdateAsset,
-	AppUpdateInfo,
 	AppWindowBounds,
 	CreateAgentInput,
 	FeishuBotConfig,
@@ -55,6 +54,8 @@ import { TerminalSessionManager } from "./terminal/TerminalSessionManager";
 import { TelemetryService } from "./telemetry/TelemetryService";
 import { SkillManager } from "./skills/SkillManager";
 import { ExtensionManager } from "./extensions/ExtensionManager";
+import { PiUpdateChecker } from "./pi/PiUpdateChecker";
+import { checkForAppUpdate, RELEASES_URL } from "./update/AppUpdateChecker";
 import { WebServiceManager } from "./web/WebServiceManager";
 import { FeishuBridge } from "./feishu/FeishuBridge";
 import {
@@ -84,202 +85,15 @@ let agentManager: AgentManager;
 let configManager: ConfigManager;
 let skillManager: SkillManager;
 let extensionManager: ExtensionManager;
+let piUpdateChecker: PiUpdateChecker;
 let webServiceManager: WebServiceManager;
 let terminalManager: TerminalSessionManager;
 let feishuBridge: FeishuBridge | null = null;
 
-const RELEASES_URL = "https://github.com/ayuayue/pi-desktop/releases";
-const LATEST_RELEASE_API =
-	"https://api.github.com/repos/ayuayue/pi-desktop/releases/latest";
 const POSTHOG_PROJECT_KEY =
 	process.env.POSTHOG_PROJECT_KEY ??
 	"phc_xgJ8gFUMgExZEEPzZ7VRa7698ENcaDRquWZVGYb2dCFK";
 const POSTHOG_HOST = process.env.POSTHOG_HOST ?? "https://us.i.posthog.com";
-
-type GitHubReleaseAsset = {
-	name: string;
-	browser_download_url: string;
-	size: number;
-};
-
-type GitHubRelease = {
-	tag_name?: string;
-	name?: string;
-	body?: string;
-	html_url?: string;
-	published_at?: string;
-	assets?: GitHubReleaseAsset[];
-};
-
-function normalizeVersion(version: string) {
-	return version.trim().replace(/^v/i, "");
-}
-
-function compareVersions(left: string, right: string) {
-	const leftParts = normalizeVersion(left)
-		.split(/[.-]/)
-		.map((part) => Number(part) || 0);
-	const rightParts = normalizeVersion(right)
-		.split(/[.-]/)
-		.map((part) => Number(part) || 0);
-	const length = Math.max(leftParts.length, rightParts.length);
-	for (let index = 0; index < length; index += 1) {
-		const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-		if (diff !== 0) return diff;
-	}
-	return 0;
-}
-
-function selectRecommendedAsset(
-	assets: AppUpdateAsset[],
-	installationType?: "portable" | "installed",
-) {
-	const platform = process.platform;
-	const arch = process.arch;
-	// 优先使用持久化的安装类型，回退到运行时检测
-	const isPortable =
-		installationType === "portable" ||
-		(installationType === undefined && process.env.PORTABLE_EXECUTABLE_DIR !== undefined);
-
-	// 映射资产以便匹配
-	const candidates = assets.map((asset) => ({
-		...asset,
-		lowerName: asset.name.toLowerCase(),
-	}));
-
-	// 根据架构确定关键词，严格匹配
-	const archKeywords =
-		arch === "arm64" ? ["arm64", "aarch64"] : ["x64", "amd64", "x86_64"];
-	const matchesArch = (name: string) =>
-		archKeywords.some((keyword) => name.includes(keyword));
-
-	// 检查是否为非目标架构（用于排除不匹配的资产）
-	const isWrongArch = (name: string) => {
-		if (arch === "arm64") {
-			// 当前是 ARM64，排除 x64 相关的
-			return /\b(x64|amd64|x86_64)\b/i.test(name);
-		} else {
-			// 当前是 x64，排除 arm64 相关的
-			return /\b(arm64|aarch64)\b/i.test(name);
-		}
-	};
-
-	if (platform === "win32") {
-		// Windows: 优先匹配当前安装形态（便携版 vs 安装版）和架构
-		if (isPortable) {
-			// 便携版：优先推荐 zip
-			return (
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".zip") && matchesArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".zip") && !isWrongArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".exe") && matchesArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".exe") && !isWrongArch(asset.lowerName),
-				)
-			);
-		} else {
-			// 安装版：优先推荐 exe
-			return (
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".exe") && matchesArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".exe") && !isWrongArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".zip") && matchesArch(asset.lowerName),
-				) ??
-				candidates.find(
-					(asset) => asset.lowerName.endsWith(".zip") && !isWrongArch(asset.lowerName),
-				)
-			);
-		}
-	}
-
-	if (platform === "darwin") {
-		// macOS: 优先 dmg，严格匹配架构
-		return (
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".dmg") && matchesArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".dmg") && !isWrongArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".zip") && matchesArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".zip") && !isWrongArch(asset.lowerName),
-			)
-		);
-	}
-
-	if (platform === "linux") {
-		// Linux: 优先 AppImage，严格匹配架构
-		return (
-			candidates.find(
-				(asset) => asset.lowerName.includes("appimage") && matchesArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) =>
-					asset.lowerName.includes("appimage") && !isWrongArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".deb") && matchesArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".deb") && !isWrongArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".tar.gz") && matchesArch(asset.lowerName),
-			) ??
-			candidates.find(
-				(asset) => asset.lowerName.endsWith(".tar.gz") && !isWrongArch(asset.lowerName),
-			)
-		);
-	}
-
-	// 回退：返回第一个匹配架构的资产
-	return candidates.find((asset) => matchesArch(asset.lowerName)) ?? candidates[0];
-}
-
-async function checkForAppUpdate(
-	installationType?: "portable" | "installed",
-): Promise<AppUpdateInfo> {
-	const currentVersion = app.getVersion();
-	const response = await fetch(LATEST_RELEASE_API, {
-		headers: {
-			Accept: "application/vnd.github+json",
-			"User-Agent": `pi-desktop/${currentVersion}`,
-		},
-	});
-	if (!response.ok) {
-		throw new Error(`GitHub Release 检查失败：HTTP ${response.status}`);
-	}
-	const release = (await response.json()) as GitHubRelease;
-	const latestVersion = normalizeVersion(release.tag_name || currentVersion);
-	const assets = (release.assets ?? []).map((asset) => ({
-		name: asset.name,
-		url: asset.browser_download_url,
-		size: asset.size,
-	}));
-	return {
-		currentVersion,
-		latestVersion,
-		hasUpdate: compareVersions(latestVersion, currentVersion) > 0,
-		releaseName: release.name || `v${latestVersion}`,
-		releaseNotes: release.body || "",
-		releaseUrl: release.html_url || RELEASES_URL,
-		publishedAt: release.published_at,
-		assets,
-		recommendedAsset: selectRecommendedAsset(assets, installationType),
-	};
-}
 
 function setupTray() {
 	// iconPath 由 electron-vite 的 ?asset 后缀自动解析，打包后也能正确定位
@@ -357,6 +171,114 @@ function openInternalLinkWindow(url: string) {
 	});
 	internalLinkWindow.show();
 	internalLinkWindow.focus();
+}
+
+/** 将本地目录转换为 VS Code 自定义协议 URI。
+ *  VS Code 使用 vscode://file 打开目录时，目录 URI 需要结尾斜杠；
+ *  同时逐段编码空格、中文、# 等字符，避免新目录路径在协议回退中被截断。 */
+function toVSCodeFolderUri(targetPath: string): string {
+	const normalized = targetPath.replace(/\\/g, "/").replace(/\/+$/, "");
+	const encoded = normalized
+		.split("/")
+		.map((segment, index) => {
+			const encodedSegment = encodeURIComponent(segment);
+			return index === 0 ? encodedSegment.replace(/%3A$/i, ":") : encodedSegment;
+		})
+		.join("/");
+	return `vscode://file/${encoded}/`;
+}
+
+/** 清理 Electron 注入的环境变量，避免 spawn 子进程继承后误判上下文。 */
+function sanitizeSpawnEnv(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	delete env.ELECTRON_RUN_AS_NODE;
+	delete env.NODE_OPTIONS;
+	delete env.NODE_PATH;
+	return env;
+}
+
+/** 调用 PATH 上的 VS Code CLI 打开目录。
+ *  Windows 下 Scoop/VS Code 会同时放置 extensionless shell shim 和 code.cmd；
+ *  显式调用 code.cmd 可避开 shim 歧义，并且不要隐藏启动窗口，避免 VS Code GUI 继承隐藏状态后 CLI 返回 0 但窗口不可见。 */
+function spawnCodeViaCmd(targetPath: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		let stderr = "";
+		const child = process.platform === "win32"
+			? spawn(
+				"cmd.exe",
+				["/d", "/c", "code.cmd", targetPath],
+				{
+					env: sanitizeSpawnEnv(),
+					windowsHide: false,
+					stdio: ["ignore", "ignore", "pipe"],
+				},
+			)
+			: spawn("code", [targetPath], {
+				env: sanitizeSpawnEnv(),
+				stdio: ["ignore", "ignore", "pipe"],
+			});
+
+		child.stderr?.on("data", chunk => {
+			stderr += chunk.toString("utf8");
+		});
+
+		const timeout = setTimeout(() => {
+			if (!settled) {
+				settled = true;
+				child.kill();
+				console.error("[VSCode] spawnCodeViaCmd timeout", { targetPath, stderr });
+				reject(new Error("VS Code 启动超时"));
+			}
+		}, 8000);
+
+		child.on("error", (err) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			console.error("[VSCode] spawnCodeViaCmd error", err);
+			reject(new Error(`无法启动 VS Code：${err.message}`));
+		});
+
+		child.on("close", (code) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			if (code === 0 || code === null) {
+				resolve();
+			} else {
+				reject(new Error(`VS Code 启动失败，退出码：${code}${stderr ? `，stderr：${stderr}` : ""}`));
+			}
+		});
+	});
+}
+
+/** 启动 VS Code 打开目录。
+ *  Windows：cmd → code.cmd 命令 → vscode:// 协议回退。
+ *  macOS/Linux：code 命令 → vscode:// 协议回退。 */
+async function openDirectoryInVSCode(targetPath: string): Promise<void> {
+	let lastError: Error | undefined;
+	// 1) 通过 cmd.exe 调用 code 命令
+	try {
+		await spawnCodeViaCmd(targetPath);
+		return;
+	} catch (err) {
+		lastError = err instanceof Error ? err : new Error(String(err));
+		console.error("[VSCode] openDirectoryInVSCode spawnCodeViaCmd failed", lastError);
+	}
+
+	// 2) 回退：vscode:// 自定义协议
+	try {
+		const folderUri = toVSCodeFolderUri(targetPath);
+		await shell.openExternal(folderUri);
+	} catch (err) {
+		const protocolError = err instanceof Error ? err.message : String(err);
+		throw new Error(
+			lastError
+				? `VS Code 启动失败：${lastError.message}；协议回退也失败：${protocolError}`
+				: `VS Code 启动失败：${protocolError}`,
+		);
+	}
 }
 
 function printStartupInfo() {
@@ -958,6 +880,7 @@ function registerIpc() {
 			return status;
 		},
 	);
+	ipcMain.handle(ipcChannels.piCheckUpdates, () => piUpdateChecker.check());
 	ipcMain.handle(ipcChannels.appInfo, () => ({
 		version: app.getVersion(),
 		releasesUrl: RELEASES_URL,
@@ -987,28 +910,17 @@ function registerIpc() {
 			throw new Error("项目路径为空");
 		}
 		const resolvedPath = resolve(projectPath);
-		const info = await stat(resolvedPath).catch(() => null);
+		const info = await stat(resolvedPath).catch((error) => {
+			console.error("[VSCode] IPC stat failed", error);
+			return null;
+		});
 		if (!info?.isDirectory()) {
 			throw new Error(`项目目录不存在：${resolvedPath}`);
 		}
-		// 使用 VS Code 的 vscode:// URI 协议打开目录
-		const vscodeUri = toVSCodeFileUri(resolvedPath);
-		await shell.openExternal(vscodeUri);
+		// 优先通过 PATH 上的 code 命令打开目录，避免 vscode:// 协议弹窗确认；
+		// 协议入口只作为兜底，确保用户仍能打开项目。
+		await openDirectoryInVSCode(resolvedPath);
 	});
-
-/** 将本地路径转为 vscode://file/ URI，正确处理 Windows 盘符和特殊字符 */
-function toVSCodeFileUri(targetPath: string): string {
-	const normalized = targetPath.replace(/\\/g, "/");
-	const encoded = normalized
-		.split("/")
-		.map((segment, index) =>
-			index === 0 && /^[A-Za-z]:$/.test(segment)
-				? segment
-				: encodeURIComponent(segment),
-		)
-		.join("/");
-	return `vscode://file/${encoded}`;
-}
 	ipcMain.handle(ipcChannels.appRestart, async () => {
 		// 标记为退出状态，避免 closeToTray 阻止重启
 		isQuitting = true;
@@ -1364,6 +1276,11 @@ app.whenReady().then(async () => {
 	configManager = new ConfigManager();
 	skillManager = new SkillManager();
 	extensionManager = new ExtensionManager(piLocator, () => settingsStore.get());
+	piUpdateChecker = new PiUpdateChecker(
+		piLocator,
+		extensionManager,
+		() => settingsStore.get(),
+	);
 	agentManager = new AgentManager(
 		(id) => projectStore.get(id),
 		() => mainWindow,

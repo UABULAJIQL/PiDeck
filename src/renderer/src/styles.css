@@ -521,6 +521,7 @@ select:focus-visible {
 	--list-hover-width: 320px;
 	--drawer-width: 270px;
 	--window-drag-height: 0px;
+	--window-controls-width: 200px;
 	height: 100vh;
 	min-height: 0;
 	display: grid;
@@ -537,7 +538,7 @@ select:focus-visible {
 	position: fixed;
 	top: 0;
 	left: 0;
-	right: 0;
+	right: var(--window-controls-width);
 	height: var(--window-drag-height);
 	z-index: 910;
 	background: var(--color-bg-sidebar);
@@ -550,6 +551,7 @@ select:focus-visible {
 	z-index: 930;
 	display: grid;
 	grid-template-columns: repeat(4, 50px);
+	width: var(--window-controls-width);
 	height: var(--window-drag-height);
 	-webkit-app-region: no-drag;
 }
@@ -595,21 +597,36 @@ select:focus-visible {
 	margin-top: calc(-1 * var(--window-drag-height));
 	padding-top: var(--window-drag-height);
 }
-.custom-titlebar-enabled .list-toolbar {
+.custom-titlebar-enabled .list-toolbar,
+.custom-titlebar-enabled .chat-header {
 	position: relative;
 	z-index: 1;
 	-webkit-app-region: drag;
 }
+/*
+ * 只把真正位于可拖拽顶栏里的控件标记为 no-drag。
+ * Electron/Windows 的 no-drag 区域可能影响自定义标题栏命中测试；如果这里全局匹配
+ * button/input，聊天区里全宽的“思考过程”展开按钮会在窗口顶部挖出同宽的不可拖动区域。
+ */
 .custom-titlebar-enabled .list-toolbar button,
+.custom-titlebar-enabled .list-toolbar input,
+.custom-titlebar-enabled .list-toolbar textarea,
+.custom-titlebar-enabled .list-toolbar select,
+.custom-titlebar-enabled .list-toolbar [role="button"],
 .custom-titlebar-enabled .toolbar-actions,
 .custom-titlebar-enabled .app-badge,
 .custom-titlebar-enabled .search-row,
-.custom-titlebar-enabled .chat-header,
-.custom-titlebar-enabled .composer,
-.custom-titlebar-enabled input,
-.custom-titlebar-enabled textarea,
-.custom-titlebar-enabled select,
-.custom-titlebar-enabled button {
+.custom-titlebar-enabled .chat-header-actions,
+.custom-titlebar-enabled .header-action-group,
+.custom-titlebar-enabled .panel-group,
+.custom-titlebar-enabled .branch-group,
+.custom-titlebar-enabled .session-group,
+.custom-titlebar-enabled .session-combo,
+.custom-titlebar-enabled .chat-header button,
+.custom-titlebar-enabled .chat-header input,
+.custom-titlebar-enabled .chat-header textarea,
+.custom-titlebar-enabled .chat-header select,
+.custom-titlebar-enabled .chat-header [role="button"] {
 	-webkit-app-region: no-drag;
 }
 .wechat-shell.drawer-open {
@@ -4462,7 +4479,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	color: var(--color-text-inverse);
 }
 
-.session-delete-confirm-backdrop {
+.session-delete-confirm-backdrop,
+.approval-dialog-backdrop {
 	position: fixed;
 	inset: 0;
 	z-index: 130;
@@ -4470,7 +4488,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	place-items: center;
 	background: var(--overlay-backdrop-soft);
 }
-.session-delete-confirm {
+.session-delete-confirm,
+.approval-dialog {
 	width: min(360px, calc(100vw - 48px));
 	padding: 18px;
 	border: 1px solid var(--color-border-subtle);
@@ -4479,26 +4498,30 @@ body.is-composer-resizing .composer-resize-handle::after {
 	box-shadow: var(--shadow-popover);
 	animation: picker-check-in 0.16s ease-out;
 }
-.session-delete-confirm strong {
+.session-delete-confirm strong,
+.approval-dialog strong {
 	display: block;
 	color: var(--color-text-primary);
 	font-size: var(--font-size-title);
 	line-height: var(--line-height-title);
 	margin-bottom: var(--space-2);
 }
-.session-delete-confirm p {
+.session-delete-confirm p,
+.approval-dialog p {
 	margin: 0;
 	color: var(--color-text-secondary);
 	font-size: var(--font-size-control);
 	line-height: var(--line-height-control);
 }
-.session-delete-confirm-actions {
+.session-delete-confirm-actions,
+.approval-dialog-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--space-2);
 	margin-top: var(--space-4);
 }
-.session-delete-confirm-actions button {
+.session-delete-confirm-actions button,
+.approval-dialog-actions button {
 	height: var(--control-height-md);
 	padding: 0 var(--space-3);
 	border: 1px solid var(--color-border-subtle);
@@ -4508,19 +4531,127 @@ body.is-composer-resizing .composer-resize-handle::after {
 	font-size: var(--font-size-caption);
 	cursor: pointer;
 }
-.session-delete-confirm-actions button:hover {
+.session-delete-confirm-actions button:hover,
+.approval-dialog-actions button:hover {
 	background: var(--color-bg-hover);
 }
-.session-delete-confirm-actions button.danger {
+.session-delete-confirm-actions button.danger,
+.approval-dialog-actions button.danger {
 	border-color: color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
 	background: var(--color-danger-soft);
 	color: var(--color-danger);
 }
-.session-delete-confirm-actions button.danger:hover {
+.session-delete-confirm-actions button.danger:hover,
+.approval-dialog-actions button.danger:hover {
 	background: color-mix(in srgb, var(--color-danger-soft) 86%, var(--color-bg-panel));
 }
 .approval-dialog {
 	width: min(520px, calc(100vw - 48px));
+}
+.approval-dialog p {
+	white-space: pre-wrap;
+	line-height: var(--line-height-body);
+}
+.approval-select-dialog {
+	width: min(640px, calc(100vw - 48px));
+}
+.approval-select-search {
+	margin-top: var(--space-4);
+}
+.approval-select-search input {
+	width: 100%;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	padding: 9px 10px;
+	outline: none;
+}
+.approval-select-search input:focus {
+	border-color: var(--color-accent);
+	background: var(--color-bg-panel);
+	box-shadow: var(--focus-ring);
+}
+.approval-select-search input:disabled {
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+.approval-select-list {
+	max-height: min(300px, calc(100vh - 360px));
+	margin-top: var(--space-3);
+	padding: var(--space-1);
+	overflow-y: auto;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border-default) transparent;
+}
+.approval-select-list::-webkit-scrollbar {
+	width: 6px;
+}
+.approval-select-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+.approval-select-list::-webkit-scrollbar-thumb {
+	background: var(--color-border-default);
+	border-radius: 3px;
+}
+.approval-select-option {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-primary);
+	padding: 7px 9px;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 0.08s, box-shadow 0.08s;
+}
+.approval-select-option:hover,
+.approval-select-option.active,
+.approval-select-option:focus-visible {
+	background: var(--color-accent-soft);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+	outline: none;
+}
+.approval-select-option:disabled {
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+.approval-select-option-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.approval-select-option-desc {
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
+	line-height: var(--line-height-caption);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.approval-select-empty {
+	padding: 20px var(--space-3);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
+	text-align: center;
+}
+.approval-dialog-help {
+	display: block;
+	margin-top: var(--space-3);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
+	line-height: var(--line-height-caption);
 }
 .approval-dialog-meta {
 	display: block;
@@ -5006,6 +5137,80 @@ body.is-composer-resizing .composer-resize-handle::after {
 .codex-import-report span.error {
 	background: var(--color-danger-soft);
 	color: var(--color-danger);
+}
+.pi-update-notice {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	gap: var(--space-2);
+	width: min(880px, 100%);
+	margin: 0 auto var(--space-4);
+	padding: 0;
+}
+.pi-update-card {
+	border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--color-border-subtle));
+	border-radius: var(--radius-md);
+	background: color-mix(in srgb, var(--color-warning) 4%, var(--color-bg-panel));
+	padding: var(--space-2) var(--space-3);
+	box-shadow: var(--shadow-border);
+}
+.pi-update-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	color: var(--color-warning);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+}
+.pi-update-card p {
+	margin: var(--space-1) 0 0;
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+}
+.pi-update-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+.pi-update-actions button {
+	border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border-subtle));
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-panel);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	padding: 3px var(--space-2);
+	cursor: pointer;
+}
+.pi-update-actions button:hover {
+	border-color: var(--color-warning);
+	color: var(--color-warning);
+}
+.pi-update-actions button:active {
+	background: var(--color-bg-hover);
+}
+.pi-update-actions button:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+.pi-update-package-list {
+	margin: var(--space-2) 0 0;
+	padding-left: var(--space-4);
+	color: var(--color-text-primary);
+	font-family: var(--font-family-business);
+	font-size: var(--font-size-caption);
+	line-height: var(--line-height-caption);
+}
+.pi-update-package-list li {
+	margin: 2px 0;
+}
+.pi-update-package-list small {
+	margin-left: var(--space-2);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
 }
 .toast {
 	position: fixed;

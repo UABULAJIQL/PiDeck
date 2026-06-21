@@ -31,6 +31,7 @@ import type {
 	PiProxyTestResult,
 	PiSkillListResult,
 	PiSkillSummary,
+	PiUpdateNoticeInfo,
 	Project,
 	SendPromptInput,
 	SessionSummary,
@@ -165,6 +166,8 @@ const api = {
 				ipcChannels.piCheckCustom,
 				customPath,
 			) as Promise<PiInstallStatus>,
+		checkUpdates: () =>
+			ipcRenderer.invoke(ipcChannels.piCheckUpdates) as Promise<PiUpdateNoticeInfo>,
 	},
 	app: {
 		info: () => ipcRenderer.invoke(ipcChannels.appInfo) as Promise<AppInfo>,
