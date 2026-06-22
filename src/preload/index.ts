@@ -216,10 +216,12 @@ const api = {
 			ipcRenderer.invoke(ipcChannels.skillsOpenFolder, path) as Promise<void>,
 	},
 	extensions: {
-		list: () =>
-			ipcRenderer.invoke(ipcChannels.extensionsList) as Promise<PiExtensionListResult>,
-		uninstall: (source: string, scope?: "user" | "project" | "unknown") =>
-			ipcRenderer.invoke(ipcChannels.extensionsUninstall, source, scope) as Promise<void>,
+		list: (projectPath?: string) =>
+			ipcRenderer.invoke(ipcChannels.extensionsList, projectPath) as Promise<PiExtensionListResult>,
+		toggle: (source: string, enabled: boolean, scope?: "user" | "project" | "unknown", projectPath?: string) =>
+			ipcRenderer.invoke(ipcChannels.extensionsToggle, source, enabled, scope, projectPath) as Promise<void>,
+		uninstall: (source: string, scope?: "user" | "project" | "unknown", projectPath?: string) =>
+			ipcRenderer.invoke(ipcChannels.extensionsUninstall, source, scope, projectPath) as Promise<void>,
 		install: (source: string) =>
 			ipcRenderer.invoke(ipcChannels.extensionsInstall, source) as Promise<string>,
 	},

@@ -322,17 +322,19 @@ export function createPreviewApi(): PiDesktopApi {
 			openFolder: async () => undefined,
 		},
 		extensions: {
-			list: async () => ({
+			list: async (_projectPath?: string) => ({
 				extensions: [
 					{
 						id: "user:npm:preview-extension",
 						source: "npm:preview-extension",
 						path: "C:/Users/preview/.pi/agent/npm/node_modules/preview-extension",
 						scope: "user" as const,
+						enabled: true,
 					},
 				],
 				raw: "User packages:\n  npm:preview-extension\n    C:/Users/preview/.pi/agent/npm/node_modules/preview-extension\n",
 			}),
+			toggle: async () => undefined,
 			uninstall: async () => undefined,
 			install: async (_source: string) => "",
 		},

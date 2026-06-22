@@ -4933,6 +4933,7 @@ ${goalTextRef.current}
           // 配置保存后不自动重启，用户可通过 Restart 按钮手动应用新配置。
         }}
         settings={settings}
+        projectPath={currentProjectPath}
         onSettingsChange={updateSettings}
       />
 

@@ -103,6 +103,7 @@ type ConfigModalProps = {
 	onClose: () => void;
 	onSaved: () => void;
 	settings: AppSettings;
+	projectPath?: string;
 	onSettingsChange: (patch: Partial<AppSettings>) => void;
 };
 
@@ -189,6 +190,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 		raw: "",
 	});
 	const [creatingSkill, setCreatingSkill] = useState(false);
+	const [togglingExtensionSource, setTogglingExtensionSource] = useState<string | null>(null);
 	const [uninstallingExtensionSource, setUninstallingExtensionSource] = useState<string | null>(null);
 	const [newSkillName, setNewSkillName] = useState("");
 	const [newSkillDescription, setNewSkillDescription] = useState("");
@@ -807,12 +809,30 @@ function ConfigModalContent(props: ConfigModalProps) {
 		setLoading(true);
 		setError(null);
 		try {
-			const res = await api.extensions.list();
+			const res = await api.extensions.list(props.projectPath);
 			setExtensionsData(res);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : String(e));
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleToggleExtension = async (extension: PiExtensionSummary, enabled: boolean) => {
+		setTogglingExtensionSource(extension.source);
+		setError(null);
+		try {
+			await api.extensions.toggle(extension.source, enabled, extension.scope, props.projectPath);
+			await refreshExtensions();
+			showToast(
+				enabled
+					? t("config.extensionEnabledToast")
+					: t("config.extensionDisabledToast"),
+			);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : String(e));
+		} finally {
+			setTogglingExtensionSource(null);
 		}
 	};
 
@@ -823,7 +843,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 		setUninstallingExtensionSource(target.source);
 		setError(null);
 		try {
-			await api.extensions.uninstall(target.source, target.scope);
+			await api.extensions.uninstall(target.source, target.scope, props.projectPath);
 			await refreshExtensions();
 			showToast(t("config.extensionUninstalledToast"));
 		} catch (e) {
@@ -1066,8 +1086,11 @@ function ConfigModalContent(props: ConfigModalProps) {
 						<ExtensionsTab
 							data={extensionsData}
 							loading={loading}
+							projectPath={props.projectPath}
+							togglingSource={togglingExtensionSource}
 							uninstallingSource={uninstallingExtensionSource}
 							onRefresh={refreshExtensions}
+							onToggle={handleToggleExtension}
 							onUninstall={setUninstallExtensionConfirm}
 						/>
 					)}

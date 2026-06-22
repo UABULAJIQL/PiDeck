@@ -369,6 +369,9 @@ const zhCN = {
   "config.skillDeletedToast": "Skill 已删除，重启 agent 后生效",
   "config.skillDisabledToast": "Skill 已禁用，重启 agent 后生效",
   "config.skillEnabledToast": "Skill 已启用，重启 agent 后生效",
+  "config.extensionDisabledToast": "扩展已禁用，重启 agent 后生效",
+  "config.extensionEnabledToast": "扩展已启用，重启 agent 后生效",
+  "config.extensionProjectScopeToggleHint": "项目级扩展请在对应项目目录中使用 pi config 管理",
   "config.extensionUninstalledToast": "扩展已卸载，重启 agent 后生效",
   "config.count.configItems": "{count} 个配置项",
   "config.count.extensions": "{count} 个扩展",
@@ -461,6 +464,10 @@ const zhCN = {
   "config.testOutputTokens": "输出 {count}",
   "config.testingConnection": "测试中…",
   "config.tokens": "Token",
+  "config.enable": "启用",
+  "config.enabling": "启用中...",
+  "config.disable": "禁用",
+  "config.disabling": "禁用中...",
   "config.uninstall": "卸载",
   "config.uninstalling": "卸载中...",
   "config.uninstallExtensionTitle": "卸载扩展",
@@ -1286,6 +1293,12 @@ const enUS: Record<TranslationKey, string> = {
     "Skill disabled. Restart agents for it to take effect.",
   "config.skillEnabledToast":
     "Skill enabled. Restart agents for it to take effect.",
+  "config.extensionDisabledToast":
+    "Extension disabled. Restart agents for it to take effect.",
+  "config.extensionEnabledToast":
+    "Extension enabled. Restart agents for it to take effect.",
+  "config.extensionProjectScopeToggleHint":
+    "Manage project-scoped extensions with pi config in that project directory.",
   "config.extensionUninstalledToast":
     "Extension uninstalled. Restart agents for it to take effect.",
   "config.count.configItems": "{count} settings",
@@ -1381,6 +1394,10 @@ const enUS: Record<TranslationKey, string> = {
   "config.testOutputTokens": "Output {count}",
   "config.testingConnection": "Testing...",
   "config.tokens": "Token",
+  "config.enable": "Enable",
+  "config.enabling": "Enabling...",
+  "config.disable": "Disable",
+  "config.disabling": "Disabling...",
   "config.uninstall": "Uninstall",
   "config.uninstalling": "Uninstalling...",
   "config.uninstallExtensionTitle": "Uninstall Extension",

@@ -30,6 +30,7 @@ export const ipcChannels = {
 	skillsDelete: "skills:delete",
 	skillsOpenFolder: "skills:open-folder",
 	extensionsList: "extensions:list",
+	extensionsToggle: "extensions:toggle",
 	extensionsUninstall: "extensions:uninstall",
 	extensionsInstall: "extensions:install",
 	gitBranches: "git:branches",

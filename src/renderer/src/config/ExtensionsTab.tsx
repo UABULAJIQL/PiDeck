@@ -2,13 +2,7 @@ import { useState } from "react";
 import type { PiExtensionListResult, PiExtensionSummary, PiPackageInfo } from "../../../shared/types";
 import { t } from "../i18n";
 
-type ExtensionsApi = {
-	list: () => Promise<PiExtensionListResult>;
-	uninstall: (source: string, scope?: "user" | "project" | "unknown") => Promise<void>;
-	install: (source: string) => Promise<string>;
-};
-
-const api: ExtensionsApi = (window as unknown as { piDesktop?: { extensions: ExtensionsApi } }).piDesktop!.extensions;
+const api = window.piDesktop.extensions;
 
 /** 预设推荐扩展包 */
 const RECOMMENDED_PACKAGES: PiPackageInfo[] = [
@@ -57,8 +51,11 @@ const RECOMMENDED_PACKAGES: PiPackageInfo[] = [
 export function ExtensionsTab(props: {
 	data: PiExtensionListResult;
 	loading: boolean;
+	projectPath?: string;
+	togglingSource: string | null;
 	uninstallingSource: string | null;
 	onRefresh: () => void;
+	onToggle: (extension: PiExtensionSummary, enabled: boolean) => void;
 	onUninstall: (extension: PiExtensionSummary) => void;
 }) {
 	const [installing, setInstalling] = useState<string | null>(null);
@@ -151,7 +148,10 @@ export function ExtensionsTab(props: {
 							<ExtensionCard
 								key={extension.id}
 								extension={extension}
+								projectPath={props.projectPath}
+								toggling={props.togglingSource === extension.source}
 								uninstalling={props.uninstallingSource === extension.source}
+								onToggle={props.onToggle}
 								onUninstall={props.onUninstall}
 							/>
 						))
@@ -164,11 +164,16 @@ export function ExtensionsTab(props: {
 
 function ExtensionCard(props: {
 	extension: PiExtensionSummary;
+	projectPath?: string;
+	toggling: boolean;
 	uninstalling: boolean;
+	onToggle: (extension: PiExtensionSummary, enabled: boolean) => void;
 	onUninstall: (extension: PiExtensionSummary) => void;
 }) {
 	const { extension } = props;
 	const name = extension.source.replace(/^(?:npm|file|github|git):/i, "");
+	const projectScopedToggle = extension.scope === "project";
+	const projectScopedUnavailable = projectScopedToggle && !props.projectPath;
 	return (
 		<article className="session-card skill-card extension-card">
 			<div className="session-card-display">
@@ -181,6 +186,9 @@ function ExtensionCard(props: {
 									? t("common.project")
 									: t("common.global")}
 							</span>
+							<span className={`skill-state ${extension.enabled ? "enabled" : "disabled"}`}>
+								{extension.enabled ? t("common.enabled") : t("common.disabled")}
+							</span>
 						</div>
 					</div>
 					<small>{extension.source}</small>
@@ -188,8 +196,22 @@ function ExtensionCard(props: {
 				</div>
 				<div className="session-card-actions skill-card-actions">
 					<button
+						className="session-rename-button"
+						disabled={projectScopedUnavailable || props.toggling || props.uninstalling}
+						title={projectScopedUnavailable ? t("config.extensionProjectScopeToggleHint") : undefined}
+						onClick={() => props.onToggle(extension, !extension.enabled)}
+					>
+						{props.toggling
+							? extension.enabled
+								? t("config.disabling")
+								: t("config.enabling")
+							: extension.enabled
+								? t("config.disable")
+								: t("config.enable")}
+					</button>
+					<button
 						className="session-rename-button danger"
-						disabled={props.uninstalling}
+						disabled={props.toggling || props.uninstalling}
 						onClick={() => props.onUninstall(extension)}
 					>
 						{props.uninstalling ? t("config.uninstalling") : t("config.uninstall")}

@@ -316,6 +316,7 @@ export type PiExtensionSummary = {
 	source: string;
 	path?: string;
 	scope: "user" | "project" | "unknown";
+	enabled: boolean;
 };
 
 export type PiPackageInfo = {

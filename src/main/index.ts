@@ -1016,9 +1016,18 @@ function registerIpc() {
 	ipcMain.handle(ipcChannels.skillsOpenFolder, (_event, path?: string) =>
 		skillManager.openFolder(path),
 	);
-	ipcMain.handle(ipcChannels.extensionsList, () => extensionManager.list());
-	ipcMain.handle(ipcChannels.extensionsUninstall, (_event, source: string, scope?: "user" | "project" | "unknown") =>
-		extensionManager.uninstall(source, scope),
+	ipcMain.handle(ipcChannels.extensionsList, (_event, projectPath?: string) =>
+		extensionManager.list(projectPath),
+	);
+	ipcMain.handle(
+		ipcChannels.extensionsToggle,
+		(_event, source: string, enabled: boolean, scope?: "user" | "project" | "unknown", projectPath?: string) =>
+			extensionManager.setEnabled(source, scope, enabled, projectPath),
+	);
+	ipcMain.handle(
+		ipcChannels.extensionsUninstall,
+		(_event, source: string, scope?: "user" | "project" | "unknown", projectPath?: string) =>
+			extensionManager.uninstall(source, scope, projectPath),
 	);
 	ipcMain.handle(ipcChannels.extensionsInstall, (_event, source: string) =>
 		extensionManager.install(source),
@@ -1275,7 +1284,21 @@ app.whenReady().then(async () => {
 	piLocator = new PiLocator();
 	configManager = new ConfigManager();
 	skillManager = new SkillManager();
-	extensionManager = new ExtensionManager(piLocator, () => settingsStore.get());
+	extensionManager = new ExtensionManager(
+		piLocator,
+		() => settingsStore.get(),
+		async (projectPath?: string) =>
+			projectPath
+				? (await configManager.getProjectSettingsConfig(projectPath)).parsed
+				: (await configManager.getSettingsConfig()).parsed,
+		async (settings, projectPath?: string) => {
+			if (projectPath) {
+				await configManager.saveProjectSettingsConfig(projectPath, settings);
+				return;
+			}
+			await configManager.saveSettingsConfig(settings);
+		},
+	);
 	piUpdateChecker = new PiUpdateChecker(
 		piLocator,
 		extensionManager,

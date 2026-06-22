@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import { net } from "electron";
 import type { ConfigFileDiagnostic, ConfigFileReadResult } from "../../shared/types";
@@ -95,6 +95,10 @@ export class ConfigManager {
 		return this.readJsonFile<PiSettings>("settings.json", {});
 	}
 
+	async getProjectSettingsConfig(projectPath: string): Promise<ConfigFileReadResult<PiSettings>> {
+		return this.readJsonFileAtPath<PiSettings>(this.getProjectSettingsPath(projectPath), {});
+	}
+
 	// ── 保存（可视化表单） ────────────────────────────────
 
 	async saveModelsConfig(data: PiModelsFile): Promise<ConfigValidationResult> {
@@ -114,6 +118,14 @@ export class ConfigManager {
 		settings: PiSettings,
 	): Promise<ConfigValidationResult> {
 		await this.writeJsonFile("settings.json", settings);
+		return { valid: true };
+	}
+
+	async saveProjectSettingsConfig(
+		projectPath: string,
+		settings: PiSettings,
+	): Promise<ConfigValidationResult> {
+		await this.writeJsonFileAtPath(this.getProjectSettingsPath(projectPath), settings);
 		return { valid: true };
 	}
 
@@ -173,7 +185,14 @@ export class ConfigManager {
 		fileName: string,
 		fallback: T,
 	): Promise<ConfigFileReadResult<T>> {
-		const filePath = join(this.configDir, fileName);
+		return this.readJsonFileAtPath(join(this.configDir, fileName), fallback, fileName);
+	}
+
+	private async readJsonFileAtPath<T>(
+		filePath: string,
+		fallback: T,
+		fileName = filePath.split(/[/\\]/).pop() ?? "settings.json",
+	): Promise<ConfigFileReadResult<T>> {
 		try {
 			const raw = await readFile(filePath, "utf8");
 			try {
@@ -236,11 +255,18 @@ export class ConfigManager {
 		fileName: string,
 		content: unknown,
 	): Promise<void> {
-		await mkdir(this.configDir, { recursive: true });
-		const filePath = join(this.configDir, fileName);
+		await this.writeJsonFileAtPath(join(this.configDir, fileName), content);
+	}
+
+	private async writeJsonFileAtPath(filePath: string, content: unknown): Promise<void> {
+		await mkdir(dirname(filePath), { recursive: true });
 		const json =
 			typeof content === "string" ? content : JSON.stringify(content, null, 2);
 		await writeFile(filePath, json, "utf8");
+	}
+
+	private getProjectSettingsPath(projectPath: string) {
+		return join(resolve(projectPath), ".pi", "settings.json");
 	}
 
 	// ── 远程拉取模型列表 ─────────────────────────────────
