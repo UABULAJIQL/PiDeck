@@ -136,7 +136,6 @@ const api =
 const COMPOSER_MIN_HEIGHT = 260;
 const COMPOSER_DEFAULT_TERMINAL_HEIGHT = 220;
 const COMPOSER_MIN_TIMELINE_HEIGHT = 160;
-const SIDEBAR_SESSION_PAGE_SIZE = 5;
 
 function countContentLines(value: unknown) {
   if (typeof value !== "string") return 0;
@@ -282,8 +281,6 @@ export function App() {
   const [sessionLoadingByProject, setSessionLoadingByProject] = useState<
     Record<string, boolean>
   >({});
-  const [visibleSessionCountByProject, setVisibleSessionCountByProject] =
-    useState<Record<string, number>>({});
   const [gitInfo, setGitInfo] = useState<GitBranchInfo>({
     current: null,
     branches: [],
@@ -1047,13 +1044,6 @@ export function App() {
         ),
       ),
     );
-    setVisibleSessionCountByProject((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([projectId]) =>
-          projectIds.has(projectId),
-        ),
-      ),
-    );
     setSessionLoadingByProject((current) =>
       Object.fromEntries(
         Object.entries(current).filter(([projectId]) =>
@@ -1749,10 +1739,6 @@ export function App() {
         ...current,
         [projectId]: sorted,
       }));
-      setVisibleSessionCountByProject((current) => ({
-        ...current,
-        [projectId]: current[projectId] ?? SIDEBAR_SESSION_PAGE_SIZE,
-      }));
       return sorted;
     } finally {
       setSessionLoadingByProject((current) => ({
@@ -2280,11 +2266,6 @@ export function App() {
     next: Project[],
   ) {
     setSessionsByProject((current) => {
-      const updated = { ...current };
-      delete updated[removedProjectId];
-      return updated;
-    });
-    setVisibleSessionCountByProject((current) => {
       const updated = { ...current };
       delete updated[removedProjectId];
       return updated;
@@ -3685,17 +3666,6 @@ ${goalTextRef.current}
                 (session) => !activeAgentSessionPaths.has(session.filePath),
               )
               .sort((left, right) => right.updatedAt - left.updatedAt);
-            const sessionDisplayCount =
-              visibleSessionCountByProject[project.id] ??
-              SIDEBAR_SESSION_PAGE_SIZE;
-            const displayedProjectSessions = visibleProjectSessions.slice(
-              0,
-              sessionDisplayCount,
-            );
-            const hiddenSessionCount = Math.max(
-              0,
-              visibleProjectSessions.length - displayedProjectSessions.length,
-            );
             const projectSessionsLoaded = Object.prototype.hasOwnProperty.call(
               sessionsByProject,
               project.id,
@@ -3817,153 +3787,139 @@ ${goalTextRef.current}
                     </span>
                   </span>
                 </button>
-                {!isCollapsed &&
-                  agentDisplay.visibleAgents.map((agent) => {
-                    const isActiveAgent = agent.id === activeAgentId;
-                    return (
-                      <button
-                        key={agent.id}
-                        className={
-                          isActiveAgent
-                            ? "conversation agent-row active"
-                            : "conversation agent-row"
-                        }
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          setAgentMenu({
-                            x: event.clientX,
-                            y: event.clientY,
-                            agent,
-                          });
-                        }}
-                        onClick={() => {
-                          setActiveProjectId(project.id);
-                          setActiveAgentId(agent.id);
-                        }}
-                      >
-                        <span className="agent-node-marker" aria-hidden="true" />
-                        <div className="conversation-body">
-                          <div className="conversation-title">
-                            <strong>{agent.title}</strong>
-                            {agent.status && (
-                              <span className={`agent-status-indicator status-${agent.status}`}>
-                                {agent.status === 'running' && '●'}
-                                {agent.status === 'idle' && '○'}
-                                {agent.status === 'starting' && '◐'}
-                                {' '}
-                                {t(`app.status${agent.status.charAt(0).toUpperCase() + agent.status.slice(1)}` as any) || agent.status}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {!isPendingAgentId(agent.id) && (
-                        <span
-                          className="agent-row-action agent-delete"
-                          title={t("menu.closeAgent")}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void closeAgent(agent.id);
+                {!isCollapsed && (
+                  <div className="project-children-scroll">
+                    {agentDisplay.visibleAgents.map((agent) => {
+                      const isActiveAgent = agent.id === activeAgentId;
+                      return (
+                        <button
+                          key={agent.id}
+                          className={
+                            isActiveAgent
+                              ? "conversation agent-row active"
+                              : "conversation agent-row"
+                          }
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            setAgentMenu({
+                              x: event.clientX,
+                              y: event.clientY,
+                              agent,
+                            });
+                          }}
+                          onClick={() => {
+                            setActiveProjectId(project.id);
+                            setActiveAgentId(agent.id);
                           }}
                         >
-                          <X size={14} />
-                        </span>
-                      )}
-                      </button>
-                    );
-                  })}
-                {!isCollapsed && agentDisplay.hasHiddenAgents && (
-                  <button
-                    className="agent-more-row"
-                    onClick={() => {
-                      setExpandedAgentProjects((prev) => {
-                        const next = new Set(prev);
-                        next.add(project.id);
-                        return next;
-                      });
-                    }}
-                  >
-                    <span className="agent-more-branch" />
-                    <span>
-                      {t("app.moreAgents", { count: agentDisplay.hiddenCount })}
-                    </span>
-                  </button>
-                )}
-                {!isCollapsed && displayedProjectSessions.length > 0 && (
-                  <div className="project-session-list">
-                    {displayedProjectSessions.map((session) => (
+                          <span className="agent-node-marker" aria-hidden="true" />
+                          <div className="conversation-body">
+                            <div className="conversation-title">
+                              <strong>{agent.title}</strong>
+                              {agent.status && (
+                                <span
+                                  className={`agent-status-indicator status-${agent.status}`}
+                                >
+                                  {agent.status === "running" && "●"}
+                                  {agent.status === "idle" && "○"}
+                                  {agent.status === "starting" && "◐"}{" "}
+                                  {t(
+                                    `app.status${agent.status.charAt(0).toUpperCase() + agent.status.slice(1)}` as any,
+                                  ) || agent.status}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {!isPendingAgentId(agent.id) && (
+                            <span
+                              className="agent-row-action agent-delete"
+                              title={t("menu.closeAgent")}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void closeAgent(agent.id);
+                              }}
+                            >
+                              <X size={14} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {agentDisplay.hasHiddenAgents && (
                       <button
-                        key={session.filePath}
-                        className={
-                          isSameSessionPath(
-                            activeAgent?.sessionPath,
-                            session.filePath,
-                          ) && !activeSessionShownAsAgent
-                            ? "conversation agent-row session-row active"
-                            : "conversation agent-row session-row"
-                        }
-                        title={session.filePath}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          setSessionMenu({
-                            x: event.clientX,
-                            y: event.clientY,
-                            projectId: project.id,
-                            session,
+                        className="agent-more-row"
+                        onClick={() => {
+                          setExpandedAgentProjects((prev) => {
+                            const next = new Set(prev);
+                            next.add(project.id);
+                            return next;
                           });
                         }}
-                        onClick={() =>
-                          void openSidebarSession(project.id, session)
-                        }
                       >
-                        <span
-                          className="session-node-marker"
-                          aria-hidden="true"
-                        />
-                        <div className="conversation-body">
-                          <div className="conversation-title">
-                            <strong>
-                              {session.name || t("common.untitled")}
-                            </strong>
-                            <time
-                              className="session-relative-time"
-                              dateTime={new Date(session.updatedAt).toISOString()}
-                              title={new Date(session.updatedAt).toLocaleString()}
-                            >
-                              {formatSidebarRelativeTime(
-                                session.updatedAt,
-                                relativeTimeNow,
-                              )}
-                            </time>
-                          </div>
-                        </div>
+                        <span className="agent-more-branch" />
+                        <span>
+                          {t("app.moreAgents", { count: agentDisplay.hiddenCount })}
+                        </span>
                       </button>
-                    ))}
+                    )}
+                    {visibleProjectSessions.length > 0 && (
+                      <div className="project-session-list">
+                        {visibleProjectSessions.map((session) => (
+                          <button
+                            key={session.filePath}
+                            className={
+                              isSameSessionPath(
+                                activeAgent?.sessionPath,
+                                session.filePath,
+                              ) && !activeSessionShownAsAgent
+                                ? "conversation agent-row session-row active"
+                                : "conversation agent-row session-row"
+                            }
+                            title={session.filePath}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              setSessionMenu({
+                                x: event.clientX,
+                                y: event.clientY,
+                                projectId: project.id,
+                                session,
+                              });
+                            }}
+                            onClick={() =>
+                              void openSidebarSession(project.id, session)
+                            }
+                          >
+                            <span
+                              className="session-node-marker"
+                              aria-hidden="true"
+                            />
+                            <div className="conversation-body">
+                              <div className="conversation-title">
+                                <strong>
+                                  {session.name || t("common.untitled")}
+                                </strong>
+                                <time
+                                  className="session-relative-time"
+                                  dateTime={new Date(session.updatedAt).toISOString()}
+                                  title={new Date(session.updatedAt).toLocaleString()}
+                                >
+                                  {formatSidebarRelativeTime(
+                                    session.updatedAt,
+                                    relativeTimeNow,
+                                  )}
+                                </time>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {projectSessionsLoading && (
+                      <div className="project-session-loading">
+                        {t("app.projectSessionsLoading")}
+                      </div>
+                    )}
                   </div>
-                )}
-                {!isCollapsed && projectSessionsLoading && (
-                  <div className="project-session-loading">
-                    {t("app.projectSessionsLoading")}
-                  </div>
-                )}
-                {!isCollapsed && hiddenSessionCount > 0 && (
-                  <button
-                    className="session-more-row"
-                    onClick={() => {
-                      setVisibleSessionCountByProject((current) => ({
-                        ...current,
-                        [project.id]:
-                          (current[project.id] ?? SIDEBAR_SESSION_PAGE_SIZE) +
-                          SIDEBAR_SESSION_PAGE_SIZE,
-                      }));
-                    }}
-                  >
-                    <span className="agent-more-branch" />
-                    <span>
-                      {t("app.projectShowMoreSessions", {
-                        count: hiddenSessionCount,
-                      })}
-                    </span>
-                  </button>
                 )}
               </div>
             );
@@ -4194,31 +4150,17 @@ ${goalTextRef.current}
 
           {/* 加载更多历史消息按钮 */}
           {hasMoreMessages && activeAgent && activeAgent.status !== "starting" && (
-            <div style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "12px 0",
-              borderBottom: "1px solid var(--border-color)"
-            }}>
+            <div className="message-pagination">
               <button
+                className="message-pagination-button"
                 onClick={loadMoreMessages}
                 disabled={isLoadingMoreMessages}
-                style={{
-                  padding: "6px 16px",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "6px",
-                  background: "var(--bg-secondary)",
-                  color: "var(--text-primary)",
-                  fontSize: "13px",
-                  cursor: isLoadingMoreMessages ? "not-allowed" : "pointer",
-                  opacity: isLoadingMoreMessages ? 0.6 : 1,
-                  transition: "all 0.2s"
-                }}
               >
                 {isLoadingMoreMessages
-                  ? "加载中..."
-                  : `加载更多历史消息 (${activeMessages.length - paginatedMessages.length} 条)`
-                }
+                  ? t("common.loading")
+                  : t("app.loadMoreHistoryMessages", {
+                      count: activeMessages.length - paginatedMessages.length,
+                    })}
               </button>
             </div>
           )}

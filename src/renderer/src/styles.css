@@ -1038,6 +1038,9 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 
 .conversation-list {
 	/* 只允许垂直滚动，禁止横向滚动条；目录树行更紧凑，留出底部折叠按钮空间。 */
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 	overflow-x: hidden;
 	overflow-y: auto;
 	scrollbar-width: none;
@@ -1152,7 +1155,9 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 }
 .project-group {
 	position: relative;
-	display: block;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 	margin-bottom: 8px;
 }
 .project-group > .conversation:first-child {
@@ -1287,8 +1292,7 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	background: var(--color-danger-soft);
 	color: var(--color-danger);
 }
-.agent-more-row,
-.session-more-row {
+.agent-more-row {
 	position: relative;
 	width: 100%;
 	display: flex;
@@ -1304,18 +1308,32 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	font-size: var(--font-size-caption);
 	text-align: left;
 }
-.agent-more-row::before,
-.session-more-row::before {
+.agent-more-row::before {
 	display: none;
 }
 .agent-more-branch {
 	display: none;
 }
-.agent-more-row:hover,
-.session-more-row:hover {
+.agent-more-row:hover {
 	background: var(--color-bg-hover);
 	color: var(--color-text-secondary);
 }
+.project-children-scroll {
+	/* 单个项目展开后优先占用侧栏的大部分可视高度，超出后再在项目内部滚动，避免历史会话把整列无限撑长。 */
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-height: 0;
+	max-height: min(56vh, 520px);
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
+}
+.project-children-scroll::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
 .project-session-list {
 	display: grid;
 	gap: 0;
@@ -1367,10 +1385,6 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	color: var(--color-text-tertiary);
 	font-size: var(--font-size-caption);
 	line-height: var(--line-height-caption);
-}
-.session-more-row {
-	margin-left: 8px;
-	margin-bottom: 6px;
 }
 .splitter {
 	position: relative;
@@ -4535,14 +4549,12 @@ body.is-composer-resizing .composer-resize-handle::after {
 .approval-dialog-actions button:hover {
 	background: var(--color-bg-hover);
 }
-.session-delete-confirm-actions button.danger,
-.approval-dialog-actions button.danger {
+.session-delete-confirm-actions button.danger {
 	border-color: color-mix(in srgb, var(--color-danger) 22%, var(--color-border-subtle));
 	background: var(--color-danger-soft);
 	color: var(--color-danger);
 }
-.session-delete-confirm-actions button.danger:hover,
-.approval-dialog-actions button.danger:hover {
+.session-delete-confirm-actions button.danger:hover {
 	background: color-mix(in srgb, var(--color-danger-soft) 86%, var(--color-bg-panel));
 }
 .approval-dialog {
@@ -4587,7 +4599,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	border-radius: var(--radius-md);
 	background: var(--color-bg-muted);
 	scrollbar-width: thin;
-	scrollbar-color: var(--color-border-default) transparent;
+	scrollbar-color: var(--color-border-strong) transparent;
 }
 .approval-select-list::-webkit-scrollbar {
 	width: 6px;
@@ -4596,7 +4608,7 @@ body.is-composer-resizing .composer-resize-handle::after {
 	background: transparent;
 }
 .approval-select-list::-webkit-scrollbar-thumb {
-	background: var(--color-border-default);
+	background: var(--color-border-strong);
 	border-radius: 3px;
 }
 .approval-select-option {
@@ -4681,6 +4693,35 @@ body.is-composer-resizing .composer-resize-handle::after {
 	background: var(--color-bg-hover);
 }
 .approval-dialog-actions button:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+.message-pagination {
+	display: flex;
+	justify-content: center;
+	padding: var(--space-3) 0;
+	border-bottom: 1px solid var(--color-border-subtle);
+}
+.message-pagination-button {
+	height: var(--control-height-md);
+	padding: 0 var(--space-4);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	transition:
+		border-color 0.16s ease,
+		background-color 0.16s ease,
+		color 0.16s ease,
+		opacity 0.16s ease;
+}
+.message-pagination-button:hover:not(:disabled) {
+	border-color: var(--color-border-strong);
+	background: var(--color-bg-hover);
+}
+.message-pagination-button:focus-visible {
 	outline: none;
 	box-shadow: var(--focus-ring);
 }
