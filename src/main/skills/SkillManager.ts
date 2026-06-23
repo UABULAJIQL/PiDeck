@@ -62,6 +62,7 @@ export class SkillManager {
 		return this.readSkill(skillPath, location, "directory");
 	}
 
+
 	async toggle(skillPath: string, enabled: boolean): Promise<PiSkillSummary> {
 		const skill = await this.findByPath(skillPath);
 		const raw = await readFile(skill.path, "utf8");

@@ -8,6 +8,7 @@ import {
 	type PointerEvent as ReactPointerEvent,
 	type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -274,7 +275,6 @@ export function ComposerToolbar(props: {
 	state?: AgentRuntimeState;
 	compacting: boolean;
 	disabled?: boolean;
-	onCycleModel: () => void;
 	onPickModel: () => void;
 	onPickThinking: () => void;
 	onCompact: () => void;
@@ -291,9 +291,6 @@ export function ComposerToolbar(props: {
 		<div className="composer-toolbar">
 			<button onClick={props.onPickModel} disabled={props.disabled}>
 				{t("app.model")}: {props.state?.provider ? `${props.state.provider}/` : ""}{props.state?.modelName ?? "-"}
-			</button>
-			<button onClick={props.onCycleModel} disabled={props.disabled}>
-				{t("app.cycleModel")}
 			</button>
 			<button onClick={props.onPickThinking} disabled={props.disabled}>
 				{t("app.think")}: {thinkingDisplay}
@@ -371,7 +368,7 @@ export function ModelPicker(props: {
 		return a.localeCompare(b);
 	});
 	
-	return (
+	const content = (
 		<div className="picker-backdrop" onClick={props.onClose}>
 			<div
 				className="picker-palette model-picker"
@@ -439,6 +436,7 @@ export function ModelPicker(props: {
 			</div>
 		</div>
 	);
+	return typeof document === "undefined" ? content : createPortal(content, document.body);
 }
 
 const THINKING_LEVELS = [
@@ -457,7 +455,7 @@ export function ThinkingPicker(props: {
 	onClose: () => void;
 	onPick: (level: string) => void;
 }) {
-	return (
+	const content = (
 		<div className="picker-backdrop" onClick={props.onClose}>
 			<div
 				className="picker-palette thinking-picker"
@@ -497,6 +495,7 @@ export function ThinkingPicker(props: {
 			</div>
 		</div>
 	);
+	return typeof document === "undefined" ? content : createPortal(content, document.body);
 }
 
 function formatCompact(value?: number | null) {
@@ -1410,6 +1409,7 @@ export const AgentRun = memo(function AgentRun(props: {
 	onOpenExternal: (url: string) => void;
 	onOpenFile?: (path: string) => void;
 	onDiffFile?: (path: string) => void;
+	onUndoUserMessage?: (message: ChatMessage) => void;
 	onResendUserMessage?: (message: ChatMessage) => void;
 	fileSummariesByMessage?: Record<string, SessionModifiedFile[]>;
 }) {
@@ -1466,6 +1466,7 @@ export const AgentRun = memo(function AgentRun(props: {
 									onPreviewImage={props.onPreviewImage}
 									onOpenExternal={props.onOpenExternal}
 									onOpenFile={props.onOpenFile}
+									onUndoUserMessage={props.onUndoUserMessage}
 									onResendUserMessage={props.onResendUserMessage}
 									showThinking={false}
 									compact
@@ -1523,6 +1524,7 @@ export const ChatBubble = memo(function ChatBubble(props: {
 	showThinking?: boolean;
 	onOpenExternal: (url: string) => void;
 	onOpenFile?: (path: string) => void;
+	onUndoUserMessage?: (message: ChatMessage) => void;
 	onResendUserMessage?: (message: ChatMessage) => void;
 	compact?: boolean;
 }) {
@@ -1680,7 +1682,15 @@ export const ChatBubble = memo(function ChatBubble(props: {
 							>
 								{t("common.edit")}
 							</button>
+							{props.onUndoUserMessage && (
 							<button
+								onClick={() => props.onUndoUserMessage?.(message)}
+								title={t("app.undoTitle")}
+							>
+								{t("app.undo")}
+							</button>
+						)}
+						<button
 								onClick={() => props.onResendUserMessage?.(message)}
 								title={t("app.resendTitle")}
 							>
@@ -2636,6 +2646,132 @@ function SessionsPanel(props: {
 		}
 	}
 
+	function renderSessionCard(session: SessionSummary) {
+		return (
+			<div
+				key={session.filePath}
+				className="session-card"
+			>
+				{renamingPath === session.filePath ? (
+					<div className="session-rename-row">
+						<input
+							ref={inputRef}
+							value={editValue}
+							onChange={(e) => setEditValue(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") confirmRename();
+								if (e.key === "Escape") {
+									setRenamingPath(null);
+									setEditValue("");
+								}
+							}}
+							autoFocus
+						/>
+						<button onClick={confirmRename}>{t("common.save")}</button>
+						<button
+							onClick={() => {
+								setRenamingPath(null);
+								setEditValue("");
+							}}
+						>
+							{t("common.cancel")}
+						</button>
+					</div>
+				) : (
+					<div className="session-card-display">
+						<button
+							className="session-card-inner"
+							onClick={() => props.onOpen(session)}
+							title={session.filePath}
+						>
+							<div className="session-card-title">
+								<strong>{session.name || t("common.untitled")}</strong>
+								<small>
+									{new Date(session.updatedAt).toLocaleString()} ·{" "}
+									{t("drawer.sessionMessages", {
+										count: session.messageCount,
+									})}
+								</small>
+							</div>
+						</button>
+						<div className="session-card-actions">
+							<button
+								className="session-rename-button"
+								title={t("menu.copySession")}
+								disabled={Boolean(sessionActionLoading)}
+								onClick={() =>
+									void runSessionAction(
+										session,
+										"copy",
+										() => props.onCopy(session),
+										t("drawer.sessionCopied"),
+									)
+								}
+							>
+								{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "copy" && <span className="mini-loader" />}
+								<span>
+									{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "copy"
+										? t("menu.copying")
+										: t("common.copy")}
+								</span>
+							</button>
+							<button
+								className="session-rename-button"
+								title={t("menu.exportHtml")}
+								disabled={Boolean(sessionActionLoading)}
+								onClick={() =>
+									void runSessionAction(
+										session,
+										"export",
+										() => props.onExport(session),
+										t("drawer.sessionExported"),
+									)
+								}
+							>
+								{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "export" && <span className="mini-loader" />}
+								<span>
+									{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "export"
+										? t("menu.exporting")
+										: t("common.export")}
+								</span>
+							</button>
+							<button
+								className="session-rename-button"
+								title={t("common.rename")}
+								onClick={() => startRename(session)}
+							>
+								<span>{t("common.rename")}</span>
+							</button>
+							<button
+								className="session-rename-button danger"
+								title={t("common.delete")}
+								disabled={Boolean(sessionActionLoading)}
+								onClick={() => setDeleteConfirmSession(session)}
+							>
+								{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "delete" && <span className="mini-loader" />}
+								<span>
+									{sessionActionLoading?.filePath === session.filePath &&
+									sessionActionLoading.action === "delete"
+										? t("drawer.sessionActionDeleting")
+										: t("common.delete")}
+								</span>
+							</button>
+						</div>
+						{sessionActionNotice?.filePath === session.filePath && (
+							<div className="session-action-notice">{sessionActionNotice.text}</div>
+						)}
+					</div>
+				)}
+			</div>
+		);
+	}
+
+
 	return (
 		<div className="sessions-panel">
 			<div className="panel-action-row">
@@ -2648,128 +2784,7 @@ function SessionsPanel(props: {
 					<span>{t("drawer.sessionEmptyDesc")}</span>
 				</div>
 			)}
-			{props.sessions.map((session) => (
-				<div
-					key={session.filePath}
-					className="session-card"
-				>
-					{renamingPath === session.filePath ? (
-						<div className="session-rename-row">
-							<input
-								ref={inputRef}
-								value={editValue}
-								onChange={(e) => setEditValue(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter") confirmRename();
-									if (e.key === "Escape") {
-										setRenamingPath(null);
-										setEditValue("");
-									}
-								}}
-								autoFocus
-							/>
-							<button onClick={confirmRename}>{t("common.save")}</button>
-							<button
-								onClick={() => {
-									setRenamingPath(null);
-									setEditValue("");
-								}}
-							>
-								{t("common.cancel")}
-							</button>
-						</div>
-					) : (
-						<div className="session-card-display">
-							<button
-								className="session-card-inner"
-								onClick={() => props.onOpen(session)}
-								title={session.filePath}
-							>
-								<div className="session-card-title">
-									<strong>{session.name || t("common.untitled")}</strong>
-									<small>
-										{new Date(session.updatedAt).toLocaleString()} ·{" "}
-										{t("drawer.sessionMessages", {
-											count: session.messageCount,
-										})}
-									</small>
-								</div>
-							</button>
-							<div className="session-card-actions">
-								<button
-									className="session-rename-button"
-									title={t("menu.copySession")}
-									disabled={Boolean(sessionActionLoading)}
-									onClick={() =>
-										void runSessionAction(
-											session,
-											"copy",
-											() => props.onCopy(session),
-											t("drawer.sessionCopied"),
-										)
-									}
-								>
-									{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "copy" && <span className="mini-loader" />}
-									<span>
-										{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "copy"
-											? t("menu.copying")
-											: t("common.copy")}
-									</span>
-								</button>
-								<button
-									className="session-rename-button"
-									title={t("menu.exportHtml")}
-									disabled={Boolean(sessionActionLoading)}
-									onClick={() =>
-										void runSessionAction(
-											session,
-											"export",
-											() => props.onExport(session),
-											t("drawer.sessionExported"),
-										)
-									}
-								>
-									{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "export" && <span className="mini-loader" />}
-									<span>
-										{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "export"
-											? t("menu.exporting")
-											: t("common.export")}
-									</span>
-								</button>
-								<button
-									className="session-rename-button"
-									title={t("common.rename")}
-									onClick={() => startRename(session)}
-								>
-									<span>{t("common.rename")}</span>
-								</button>
-								<button
-									className="session-rename-button danger"
-									title={t("common.delete")}
-									disabled={Boolean(sessionActionLoading)}
-									onClick={() => setDeleteConfirmSession(session)}
-								>
-									{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "delete" && <span className="mini-loader" />}
-									<span>
-										{sessionActionLoading?.filePath === session.filePath &&
-										sessionActionLoading.action === "delete"
-											? t("drawer.sessionActionDeleting")
-											: t("common.delete")}
-									</span>
-								</button>
-							</div>
-							{sessionActionNotice?.filePath === session.filePath && (
-								<div className="session-action-notice">{sessionActionNotice.text}</div>
-							)}
-						</div>
-					)}
-				</div>
-			))}
+			{props.sessions.map(renderSessionCard)}
 			{deleteConfirmSession && (
 				<div className="session-delete-confirm-backdrop" onClick={() => setDeleteConfirmSession(null)}>
 					<section
@@ -3182,6 +3197,7 @@ export function ProjectContextMenu(props: {
 	menu: { x: number; y: number; project: Project };
 	onClose: () => void;
 	onRevealProject: () => void;
+	onTogglePin: () => void;
 	onImportCodexSessions: () => void;
 	onImportClaudeSessions: () => void;
 	onRemoveProject: () => void;
@@ -3194,6 +3210,9 @@ export function ProjectContextMenu(props: {
 				onClick={(event) => event.stopPropagation()}
 			>
 				<button onClick={props.onRevealProject}>{t("menu.revealProject")}</button>
+				<button onClick={props.onTogglePin}>
+					{props.menu.project.pinned ? t("drawer.unpinProject") : t("drawer.pinProject")}
+				</button>
 				<button onClick={props.onImportCodexSessions}>
 					{t("menu.importCodex")}
 				</button>
@@ -3211,6 +3230,7 @@ export function AgentContextMenu(props: {
 	actionLoading?: "copy" | "export" | null;
 	onClose: () => void;
 	onRename: () => void;
+	onRestart: () => void;
 	onExport: () => void;
 	onCopySession: () => void;
 	onShowLogs: () => void;
@@ -3224,6 +3244,7 @@ export function AgentContextMenu(props: {
 				onClick={(event) => event.stopPropagation()}
 			>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onRename}>{t("common.rename")}</button>
+				<button disabled={Boolean(props.actionLoading)} onClick={props.onRestart}>{t("app.restart")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onCopySession}>
 					{props.actionLoading === "copy" && <span className="mini-loader" />}
 					{props.actionLoading === "copy" ? t("menu.copying") : t("menu.copySession")}
@@ -3243,10 +3264,12 @@ export function SessionContextMenu(props: {
 	menu: { x: number; y: number; session: SessionSummary };
 	actionLoading?: "copy" | "export" | null;
 	onClose: () => void;
+	onRestartSession: () => void;
 	onRename: () => void;
 	onExport: () => void;
 	onCopySession: () => void;
 	onShowLogs: () => void;
+	onTogglePin: () => void;
 	onDeleteSession: () => void;
 }) {
 	return (
@@ -3256,7 +3279,11 @@ export function SessionContextMenu(props: {
 				style={{ left: props.menu.x, top: props.menu.y }}
 				onClick={(event) => event.stopPropagation()}
 			>
+				<button disabled={Boolean(props.actionLoading)} onClick={props.onRestartSession}>{t("app.restart")}</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onRename}>{t("common.rename")}</button>
+				<button disabled={Boolean(props.actionLoading)} onClick={props.onTogglePin}>
+					{props.menu.session.pinned ? t("app.sessionUnpin") : t("app.sessionPin")}
+				</button>
 				<button disabled={Boolean(props.actionLoading)} onClick={props.onCopySession}>
 					{props.actionLoading === "copy" && <span className="mini-loader" />}
 					{props.actionLoading === "copy" ? t("menu.copying") : t("menu.copySession")}

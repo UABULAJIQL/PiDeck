@@ -6,7 +6,6 @@ import { RawTab } from "./config/RawTab";
 import { SettingsTab } from "./config/SettingsTab";
 import { SkillsTab } from "./config/SkillsTab";
 import { ExtensionsTab } from "./config/ExtensionsTab";
-import { ImTab } from "./config/ImTab";
 import { CloseIconButton } from "./components/ui/IconButton";
 import { t } from "./i18n";
 import type {
@@ -31,8 +30,8 @@ const DEFAULT_MODEL_CONFIG: Pick<
 	input: ["text", "image"],
 };
 
-/**
- * 配置页必须能打开用户手写/旧版本生成的非标准 models.json。
+/*
+ * 配置页需要容忍用户手写的 models.json。
  * pi 自身对配置较宽松，但 UI 会访问 provider.models.length / map；这里先把缺失或异常字段归一化，
  * 避免单个 provider 配置错误导致整个 renderer 白屏。
  */
@@ -169,7 +168,7 @@ export function ConfigModal(props: ConfigModalProps) {
 
 function ConfigModalContent(props: ConfigModalProps) {
 	const { open, onClose, onSaved, settings, onSettingsChange } = props;
-	const [section, setSection] = useState<"config" | "skills" | "extensions" | "im">("config");
+	const [section, setSection] = useState<"config" | "skills" | "extensions">("config");
 	const [tab, setTab] = useState<ConfigTab>("models");
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -791,6 +790,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 		}
 	};
 
+
 	const confirmDeleteSkill = async () => {
 		if (!deleteSkillConfirm) return;
 		const target = deleteSkillConfirm;
@@ -835,6 +835,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 			setTogglingExtensionSource(null);
 		}
 	};
+
 
 	const confirmUninstallExtension = async () => {
 		if (!uninstallExtensionConfirm) return;
@@ -938,15 +939,6 @@ function ConfigModalContent(props: ConfigModalProps) {
 								onClick={() => setSection("skills")}
 							>
 								{t("config.nav.skills")}
-							</button>
-						</div>
-						<div className="config-sidebar-group">
-							<span>{t("config.group.im")}</span>
-							<button
-								className={section === "im" ? "active" : ""}
-								onClick={() => setSection("im")}
-							>
-								{t("config.nav.im")}
 							</button>
 						</div>
 					</aside>
@@ -1058,9 +1050,6 @@ function ConfigModalContent(props: ConfigModalProps) {
 						/>
 					)}
 
-					{section === "im" && !loading && (
-						<ImTab />
-					)}
 
 					{section === "skills" && !loading && (
 						<SkillsTab
@@ -1079,6 +1068,10 @@ function ConfigModalContent(props: ConfigModalProps) {
 							onToggle={(skill, enabled) => handleToggleSkill(skill.path, enabled)}
 							onDelete={setDeleteSkillConfirm}
 							onOpenFolder={(skill) => api.skills.openFolder(skill.path)}
+							onEditRemark={async (skill, remark) => {
+								await api.skills.editRemark(skill.id, remark);
+								await refreshSkills();
+							}}
 						/>
 					)}
 
@@ -1092,6 +1085,10 @@ function ConfigModalContent(props: ConfigModalProps) {
 							onRefresh={refreshExtensions}
 							onToggle={handleToggleExtension}
 							onUninstall={setUninstallExtensionConfirm}
+							onEditRemark={async (extension, remark) => {
+								await api.extensions.editRemark(extension.id, remark);
+								await refreshExtensions();
+							}}
 						/>
 					)}
 

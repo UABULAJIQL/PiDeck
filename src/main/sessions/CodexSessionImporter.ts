@@ -17,6 +17,16 @@ type ParsedCodexSession = {
 	sourceMtime: number;
 };
 
+type ParsedCodexSessionSummary = {
+	meta: Record<string, any>;
+	sourcePath: string;
+	sourceSize: number;
+	sourceMtime: number;
+	title: string;
+	preview: string;
+	messageCount: number;
+};
+
 export class CodexSessionImporter {
 	private readonly codexRoot = join(app.getPath("home"), ".codex", "sessions");
 	private readonly piRoot = join(app.getPath("home"), ".pi", "agent", "sessions");
@@ -24,13 +34,13 @@ export class CodexSessionImporter {
 	async scan(projectPath: string): Promise<CodexSessionSummary[]> {
 		const files = await this.collectJsonl(this.codexRoot).catch(() => []);
 		const sessions = await Promise.all(
-			files.map((file) => this.readCodexSession(file).catch(() => null)),
+			files.map((file) => this.readCodexSessionSummary(file).catch(() => null)),
 		);
 		const normalizedProject = this.normalize(projectPath);
 
 		const summaries = await Promise.all(
 			sessions
-				.filter((session): session is ParsedCodexSession => Boolean(session))
+				.filter((session): session is ParsedCodexSessionSummary => Boolean(session))
 				.filter((session) => this.normalize(session.meta.cwd) === normalizedProject)
 				.map((session) => this.toSummary(session, projectPath)),
 		);
@@ -88,12 +98,11 @@ export class CodexSessionImporter {
 	}
 
 	private async toSummary(
-		session: ParsedCodexSession,
+		session: ParsedCodexSessionSummary,
 		projectPath: string,
 	): Promise<CodexSessionSummary> {
 		const targetPath = this.getTargetPath(projectPath, session);
 		const importMeta = await this.readImportMeta(targetPath);
-		const converted = this.convertToPiSession(projectPath, session);
 		const status: CodexImportStatus = !importMeta
 			? "new"
 			: importMeta.sourceMtime === session.sourceMtime &&
@@ -107,11 +116,11 @@ export class CodexSessionImporter {
 			sourcePath: session.sourcePath,
 			targetPath,
 			cwd: String(session.meta.cwd ?? ""),
-			title: converted.title,
-			preview: converted.preview,
+			title: session.title,
+			preview: session.preview,
 			createdAt: originalTimestamp,
 			updatedAt: originalTimestamp,
-			messageCount: converted.messageCount,
+			messageCount: session.messageCount,
 			status,
 			sourceSize: session.sourceSize,
 			importedSourceMtime: importMeta?.sourceMtime,
@@ -323,6 +332,106 @@ export class CodexSessionImporter {
 		};
 	}
 
+	private async readCodexSessionSummary(filePath: string): Promise<ParsedCodexSessionSummary> {
+		this.assertCodexSourcePath(filePath);
+		const [raw, info] = await Promise.all([readFile(filePath, "utf8"), stat(filePath)]);
+		const titleState = { title: "", preview: "" };
+		let pendingThinking = "";
+		let messageCount = 0;
+		let meta: Record<string, any> | undefined;
+
+		const pushSummary = (role: "user" | "assistant" | "toolResult", content: unknown[]) => {
+			if (content.length === 0) return;
+			messageCount += 1;
+
+			const text = this.extractPiText(content).trim();
+			if (text && !titleState.preview) titleState.preview = text.slice(0, 160);
+			if (role === "user" && text && !titleState.title) {
+				titleState.title = this.cleanTitle(text);
+			}
+		};
+
+		for (const line of raw.split(/\r?\n/)) {
+			if (!line) continue;
+			let entry: Record<string, any>;
+			try {
+				entry = JSON.parse(line) as Record<string, any>;
+			} catch {
+				// 单行损坏时跳过整份扫描，避免个别异常 Codex 记录把导入弹窗列表直接拖死。
+				continue;
+			}
+
+			if (entry.type === "session_meta") {
+				meta = entry.payload;
+				continue;
+			}
+
+			if (entry.type === "event_msg" && entry.payload?.type === "user_message") {
+				const text = String(entry.payload.message ?? "").trim();
+				if (text) pushSummary("user", [{ type: "text", text }]);
+				continue;
+			}
+
+			if (entry.type !== "response_item") continue;
+			const payload = entry.payload ?? {};
+
+			if (payload.type === "reasoning") {
+				const reasoning = this.extractCodexText(payload).trim();
+				if (reasoning) pendingThinking = this.joinText(pendingThinking, reasoning);
+				continue;
+			}
+
+			if (payload.type === "message" && payload.role === "assistant") {
+				const text = this.extractCodexText(payload).trim();
+				const content = [
+					...(pendingThinking
+						? [{ type: "thinking", thinking: pendingThinking, thinkingSignature: "codex_reasoning" }]
+						: []),
+					...(text ? [{ type: "text", text }] : []),
+				];
+				pendingThinking = "";
+				pushSummary("assistant", content);
+				continue;
+			}
+
+			if (payload.type === "function_call") {
+				const toolName = String(payload.name ?? "tool");
+				const args = this.parseArguments(payload.arguments);
+				const content = [
+					...(pendingThinking
+						? [{ type: "thinking", thinking: pendingThinking, thinkingSignature: "codex_reasoning" }]
+						: []),
+					{ type: "toolCall", id: String(payload.call_id ?? payload.id ?? toolName), name: toolName, arguments: args },
+				];
+				pendingThinking = "";
+				pushSummary("assistant", content);
+				continue;
+			}
+
+			if (payload.type === "function_call_output") {
+				const output = this.extractToolOutput(payload);
+				pushSummary("toolResult", [{ type: "text", text: output }]);
+			}
+		}
+
+		if (pendingThinking) {
+			pushSummary("assistant", [
+				{ type: "thinking", thinking: pendingThinking, thinkingSignature: "codex_reasoning" },
+			]);
+		}
+
+		if (!meta?.id || !meta?.cwd) throw new Error("Missing Codex session metadata");
+		return {
+			meta,
+			sourcePath: filePath,
+			sourceSize: info.size,
+			sourceMtime: info.mtimeMs,
+			title: titleState.title || this.cleanTitle(basename(filePath)) || "Codex 会话",
+			preview: titleState.preview || "Codex imported session",
+			messageCount,
+		};
+	}
+
 	private assertCodexSourcePath(filePath: string) {
 		const root = this.normalize(this.codexRoot);
 		const target = this.normalize(filePath);
@@ -360,7 +469,7 @@ export class CodexSessionImporter {
 		return files;
 	}
 
-	private getTargetPath(projectPath: string, session: ParsedCodexSession) {
+	private getTargetPath(projectPath: string, session: { meta: { id?: unknown }; sourcePath: string }) {
 		const id = String(session.meta.id ?? this.hash(session.sourcePath)).replace(/[^a-zA-Z0-9_-]/g, "-");
 		return join(this.getProjectSessionDir(projectPath), `codex_${id}.jsonl`);
 	}

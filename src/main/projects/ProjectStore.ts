@@ -19,9 +19,7 @@ export class ProjectStore {
     } catch {
       this.projects = [];
     }
-    const chatChanged = this.ensureChatProject();
-    const orderChanged = this.ensureSortOrder();
-    const changed = chatChanged || orderChanged;
+    const changed = this.ensureChatProject();
     await mkdir(this.chatProjectPath, { recursive: true });
     if (changed) await this.save();
     return this.list();
@@ -72,8 +70,11 @@ export class ProjectStore {
   }
 
   async remove(id: string) {
+    const previousLength = this.projects.length;
     this.projects = this.projects.filter(project => project.id !== id || this.isChatProject(project));
-    await this.save();
+    const removed = this.projects.length !== previousLength;
+    if (removed) await this.save();
+    return removed;
   }
 
   async reorder(projectIds: string[]) {
@@ -93,6 +94,14 @@ export class ProjectStore {
       project.sortOrder = explicitOrder ?? tailStart + currentOrder.indexOf(project.id);
     });
 
+    await this.save();
+    return this.list();
+  }
+
+  async togglePinned(projectId: string) {
+    const project = this.get(projectId);
+    if (!project || this.isChatProject(project)) return this.list();
+    project.pinned = !project.pinned;
     await this.save();
     return this.list();
   }
@@ -136,24 +145,6 @@ export class ProjectStore {
           project.path !== this.chatProjectPath),
     );
     return changed || this.projects.length !== previousLength;
-  }
-
-  private ensureSortOrder() {
-    const needsOrder = this.projects.some(
-      (project) => typeof project.sortOrder !== "number" || Number.isNaN(project.sortOrder),
-    );
-    if (!needsOrder) return false;
-
-    // 首次升级旧数据时保留原来的“置顶优先 + 最近打开”顺序，之后由用户拖拽顺序接管。
-    [...this.projects]
-      .filter((project) => !this.isChatProject(project))
-      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt)
-      .forEach((project, index) => {
-        project.sortOrder = index;
-      });
-    const chatProject = this.projects.find((project) => this.isChatProject(project));
-    if (chatProject) chatProject.sortOrder = -1;
-    return true;
   }
 
   private nextSortOrder() {

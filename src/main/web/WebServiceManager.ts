@@ -134,13 +134,20 @@ export class WebServiceManager {
 			}
 			const promptMatch = url.pathname.match(/^\/api\/agents\/([^/]+)\/prompt$/);
 			if (promptMatch && request.method === "POST") {
-				const body = await this.readJson<{ message?: string }>(request);
+				const body = await this.readJson<
+					Pick<SendPromptInput, "message" | "streamingBehavior" | "uiSlashCommand">
+				>(request);
 				const message = body.message?.trim() ?? "";
 				if (!message) {
 					this.sendError(response, 400, "message 不能为空");
 					return;
 				}
-				await this.deps.sendPrompt({ agentId: decodeURIComponent(promptMatch[1]), message });
+				await this.deps.sendPrompt({
+					agentId: decodeURIComponent(promptMatch[1]),
+					message,
+					streamingBehavior: body.streamingBehavior,
+					uiSlashCommand: body.uiSlashCommand,
+				});
 				this.sendJson(response, { ok: true });
 				return;
 			}

@@ -1,7 +1,7 @@
 import { app } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { SessionSummary } from "../../shared/types";
 
 export class SessionScanner {
@@ -27,8 +27,24 @@ export class SessionScanner {
     await writeFile(filePath, `${meta}\n${raw}`, "utf8");
   }
 
+  /**
+   * 删除历史会话时只允许操作 sessions 根目录内的 jsonl 文件。
+   * renderer 可能持有旧列表或错误上下文，主进程必须再次兜底路径范围，
+   * 避免把任意绝对路径透传给 unlink。
+   */
   async delete(filePath: string): Promise<void> {
-    await unlink(filePath);
+    const rootPath = resolve(this.root);
+    const resolvedPath = resolve(filePath);
+    const relativePath = relative(rootPath, resolvedPath);
+    const isInsideRoot =
+      relativePath !== "" &&
+      relativePath !== ".." &&
+      !relativePath.startsWith(`..${sep}`) &&
+      !isAbsolute(relativePath);
+    if (!isInsideRoot || extname(resolvedPath).toLowerCase() !== ".jsonl") {
+      throw new Error("只允许删除 sessions 目录内的 .jsonl 会话文件");
+    }
+    await unlink(resolvedPath);
   }
 
   /**

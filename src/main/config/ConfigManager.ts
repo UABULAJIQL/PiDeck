@@ -14,6 +14,16 @@ const PI_AGENT_DIR = join(homedir(), ".pi", "agent");
 // 放宽超时并在错误文案中说明“超时不等于兼容模式不支持”，避免误导用户改错配置。
 const PROVIDER_TEST_TIMEOUT_MS = 45_000;
 const PROVIDER_TEST_TIMEOUT_SECONDS = PROVIDER_TEST_TIMEOUT_MS / 1000;
+const PROVIDER_API_TYPES = [
+	"openai-completions",
+	"openai-responses",
+	"openai-codex-responses",
+	"anthropic-messages",
+	"google-generative-ai",
+	"mistral-conversations",
+] as const;
+type ProviderApiType = (typeof PROVIDER_API_TYPES)[number];
+const PROVIDER_API_TYPE_SET = new Set<string>(PROVIDER_API_TYPES);
 
 export type PiModelItem = {
 	id: string;
@@ -104,8 +114,7 @@ export class ConfigManager {
 	async saveModelsConfig(data: PiModelsFile): Promise<ConfigValidationResult> {
 		const validation = this.validateModels(data);
 		if (!validation.valid) return validation;
-		// 保存前统一迁移历史别名，确保写入 models.json 的 api 名称能被 pi 官方 registry 识别。
-		await this.writeJsonFile("models.json", this.normalizeModelsForPi(data));
+		await this.writeJsonFile("models.json", data);
 		return { valid: true };
 	}
 
@@ -160,6 +169,11 @@ export class ConfigManager {
 			return { valid: false, error: "models.json 缺少 providers 字段" };
 		}
 		for (const [providerName, config] of Object.entries(data.providers)) {
+			const providerApiValidation = this.validateApiType(
+				config.api,
+				`provider "${providerName}"`,
+			);
+			if (!providerApiValidation.valid) return providerApiValidation;
 			if (!config.models || !Array.isArray(config.models)) {
 				return {
 					valid: false,
@@ -174,7 +188,23 @@ export class ConfigManager {
 						error: `provider "${providerName}" 的模型 #${i + 1} 缺少有效的 id`,
 					};
 				}
+				const modelApiValidation = this.validateApiType(
+					m.api,
+					`provider "${providerName}" 的模型 #${i + 1}`,
+				);
+				if (!modelApiValidation.valid) return modelApiValidation;
 			}
+		}
+		return { valid: true };
+	}
+
+	private validateApiType(value: unknown, owner: string): ConfigValidationResult {
+		if (value == null || value === "") return { valid: true };
+		if (typeof value !== "string" || !PROVIDER_API_TYPE_SET.has(value)) {
+			return {
+				valid: false,
+				error: `${owner} 的 api 必须是：${PROVIDER_API_TYPES.join(", ")}`,
+			};
 		}
 		return { valid: true };
 	}
@@ -554,45 +584,15 @@ export class ConfigManager {
 		}
 	}
 
-	private normalizeModelsForPi(data: PiModelsFile): PiModelsFile {
-		return {
-			...data,
-			providers: Object.fromEntries(
-				Object.entries(data.providers).map(([name, provider]) => [
-					name,
-					{
-						...provider,
-						api: this.normalizeApiType(provider.api),
-						models: provider.models.map((model) => ({
-							...model,
-							api: typeof model.api === "string"
-								? this.normalizeApiType(model.api)
-								: model.api,
-						})),
-					},
-				]),
-			),
-		};
+	private normalizeApiType(apiType?: string): ProviderApiType {
+		const normalized = apiType?.trim();
+		if (!normalized) return "openai-completions";
+		if (this.isSupportedApiType(normalized)) return normalized;
+		throw new Error(`不支持的 provider api 类型：${normalized}`);
 	}
 
-	private normalizeApiType(apiType?: string) {
-		switch (apiType) {
-			case "anthropic":
-			case "anthropic-messages":
-				return "anthropic-messages";
-			case "openai-codex-responses":
-				return "openai-codex-responses";
-			case "openai-chat-completions":
-				// 兼容早期 pi-desktop 暴露过的别名；pi 官方 registry 名称是 openai-completions。
-				return "openai-completions";
-			case "openai-completions":
-			case "openai-responses":
-			case "google-generative-ai":
-			case "mistral-conversations":
-				return apiType;
-			default:
-				return "openai-completions";
-		}
+	private isSupportedApiType(value: string): value is ProviderApiType {
+		return PROVIDER_API_TYPE_SET.has(value);
 	}
 
 	/**

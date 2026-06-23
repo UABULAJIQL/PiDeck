@@ -68,6 +68,7 @@ export class ExtensionManager {
 		await this.writePiSettings(updated, targetProjectPath);
 	}
 
+
 	private requireProjectPath(projectPath?: string) {
 		const normalized = projectPath?.trim();
 		if (!normalized) {
@@ -75,6 +76,7 @@ export class ExtensionManager {
 		}
 		return normalized;
 	}
+
 
 	private getEnabledState(
 		source: string,

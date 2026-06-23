@@ -13,6 +13,7 @@ export function ApprovalDialog(props: {
 	helperText?: string;
 	cancelResponse?: Record<string, unknown>;
 	busy: boolean;
+	inline?: boolean;
 	onSelect: (response: Record<string, unknown>) => void;
 }) {
 	const mode = props.mode ?? "actions";
@@ -174,18 +175,32 @@ export function ApprovalDialog(props: {
 		props.options,
 	]);
 
+	const isInline = props.inline ?? mode === "select";
+
 	return (
-		<div className="approval-dialog-backdrop">
+		<div
+			className={isInline ? "approval-inline-shell" : "approval-dialog-backdrop"}
+			onClick={(event) => {
+				event.preventDefault();
+				event.stopPropagation();
+			}}
+			onMouseDown={(event) => {
+				event.stopPropagation();
+			}}
+		>
 			<div
 				className={[
 					"approval-dialog",
+					isInline ? "approval-inline-card" : undefined,
 					mode === "select" ? "approval-select-dialog" : undefined,
 				]
 					.filter(Boolean)
 					.join(" ")}
 				role="dialog"
-				aria-modal="true"
+				aria-modal={isInline ? undefined : "true"}
 				aria-labelledby="approval-dialog-title"
+				onClick={(event) => event.stopPropagation()}
+				onMouseDown={(event) => event.stopPropagation()}
 			>
 				<strong id="approval-dialog-title">{props.title}</strong>
 				<p>{props.message}</p>
@@ -199,6 +214,17 @@ export function ApprovalDialog(props: {
 								ref={filterInputRef}
 								value={filter}
 								onChange={(event) => setFilter(event.target.value)}
+								onKeyDown={(event) => {
+									event.stopPropagation();
+									if (
+										event.key === "Enter" ||
+										event.key === "ArrowDown" ||
+										event.key === "ArrowUp" ||
+										event.key === "Escape"
+									) {
+										event.preventDefault();
+									}
+								}}
 								placeholder={props.filterPlaceholder}
 								aria-label={props.filterPlaceholder}
 								aria-controls="approval-select-list"
@@ -234,7 +260,12 @@ export function ApprovalDialog(props: {
 										role="option"
 										aria-selected={index === activeIndex}
 										onMouseEnter={() => setActiveIndex(index)}
-										onClick={() => selectFilteredOption(index)}
+										onMouseDown={(event) => event.stopPropagation()}
+										onClick={(event) => {
+											event.preventDefault();
+											event.stopPropagation();
+											selectFilteredOption(index);
+										}}
 										disabled={props.busy}
 									>
 										<span className="approval-select-option-label">{option.label}</span>
@@ -259,8 +290,14 @@ export function ApprovalDialog(props: {
 								ref={(element) => {
 									optionRefs.current[index] = element;
 								}}
+								type="button"
 								className={option.danger ? "danger" : ""}
-								onClick={() => selectActionOption(index)}
+								onMouseDown={(event) => event.stopPropagation()}
+								onClick={(event) => {
+									event.preventDefault();
+									event.stopPropagation();
+									selectActionOption(index);
+								}}
 								disabled={props.busy}
 							>
 								{option.label}

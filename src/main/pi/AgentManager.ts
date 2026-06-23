@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import type {
 	AgentRuntimeState,
+	AgentServerRequest,
 	AgentTab,
 	AvailableModel,
 	ChatMessage,
@@ -40,7 +41,7 @@ export class AgentManager {
 	private readonly toolMessageIds = new Map<string, Map<string, string>>();
 	/** 每个 agent 只保留一条自动重试状态消息，避免短暂 5xx/网络错误把会话刷屏。 */
 	private readonly retryStatusMessageIds = new Map<string, string>();
-	/** 本地事件监听器（用于 FeishuBridge 等主进程内部订阅） */
+	/** 本地事件监听器（供主进程内部模块订阅运行时事件） */
 	private readonly localEventListeners = new Set<(agentId: string, event: unknown) => void>();
 	/**
 	 * Codex 审批等交互通过 server-initiated JSON-RPC request 进入；
@@ -48,6 +49,11 @@ export class AgentManager {
 	 * 否则上游会一直阻塞当前 turn，用户看到的就是“选项无法操作、界面卡死”。
 	 */
 	private readonly pendingServerRequests = new Map<string, Map<string, RpcServerRequest>>();
+	/**
+	 * 桌面端扩展 slash 命令（例如 /advisor）通过 prompt 触发 extension UI。
+	 * 它们只是本地配置/选择器入口，等待真正出现 extension_ui_request 后从聊天流中移除。
+	 */
+	private readonly pendingUiSlashCommands = new Map<string, { command: string; sawUiRequest: boolean }>();
 	private readonly bashInputRequests = new BashInputRequestTracker({
 		emitRequest: (agentId, request) => this.trackAndEmitServerRequest(agentId, request),
 		cancelRequest: (agentId, requestId) => this.cancelServerRequest(agentId, requestId),
@@ -67,6 +73,17 @@ export class AgentManager {
 
 	getMessages(agentId: string) {
 		return this.messages.get(agentId) ?? [];
+	}
+
+	async undoUserMessage(agentId: string, messageId: string) {
+		const list = this.messages.get(agentId) ?? [];
+		const index = list.findIndex((message) => message.id === messageId && message.role === "user");
+		if (index < 0) return null;
+		const [removed] = list.splice(index, 1);
+		this.messages.set(agentId, list);
+		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.refreshAutoTitle(agentId);
+		return removed;
 	}
 
 	getCwd(agentId: string) {
@@ -347,10 +364,20 @@ export class AgentManager {
 			}
 		}
 
+		const isUiSlashCommand = Boolean(
+			input.uiSlashCommand && trimmed.startsWith("/") && !hasImages,
+		);
+		if (isUiSlashCommand) {
+			this.pendingUiSlashCommands.set(input.agentId, {
+				command: trimmed,
+				sawUiRequest: false,
+			});
+		}
+
 		// 判断 agent 是否已在忙碌中；运行中继续发送时必须带 streamingBehavior，
 		// 否则 pi RPC 会拒绝请求。该值也用于给用户消息打上投递语义标记。
 		const alreadyBusy = runtime.tab.status === "running";
-		const promptDeliveryBehavior = input.streamingBehavior ?? (alreadyBusy ? "steer" : undefined);
+		const promptDeliveryBehavior = input.streamingBehavior ?? (alreadyBusy && !isUiSlashCommand ? "steer" : undefined);
 
 		// 保存用户消息（包含图片）。运行中消息先显示在对话里，并标记它会在何时被 pi 消费：
 		// steer=下一次 LLM 调用前，followUp=当前 agent 完全停止后。
@@ -364,6 +391,7 @@ export class AgentManager {
 
 		// 在设置状态为 running 之前检查进程是否还活着，避免进程崩溃后状态不一致
 		if (!runtime.process.isRunning()) {
+			if (isUiSlashCommand) this.pendingUiSlashCommands.delete(input.agentId);
 			runtime.tab.status = "error";
 			this.addMessage(
 				input.agentId,
@@ -407,6 +435,14 @@ export class AgentManager {
 					response.error ?? "图片消息发送失败",
 				);
 				this.emitState();
+			} else if (
+				isUiSlashCommand &&
+				this.pendingUiSlashCommands.get(input.agentId)?.sawUiRequest
+			) {
+				// 扩展 UI slash 命令只完成本地选择器交互，不会产生 assistant 流；
+				// prompt RPC 返回后主动恢复 idle，避免选择完成后仍显示“正在响应”。
+				runtime.tab.status = "idle";
+				this.emitState();
 			}
 		} catch (error) {
 			// 超时或进程崩溃后，需要明确提示用户重启 Agent
@@ -432,6 +468,8 @@ export class AgentManager {
 				);
 			}
 			this.emitState();
+		} finally {
+			if (isUiSlashCommand) this.pendingUiSlashCommands.delete(input.agentId);
 		}
 	}
 
@@ -833,6 +871,7 @@ export class AgentManager {
 		this.agents.delete(agentId);
 		this.messages.delete(agentId);
 		this.pendingServerRequests.delete(agentId);
+		this.pendingUiSlashCommands.delete(agentId);
 		this.bashInputRequests.clearAgent(agentId);
 		// Agent 关闭后会放入预热池复用；旧监听器捕获了旧 agentId，必须清掉，
 		// 否则复用后的 extension_ui_request 可能被同时派发到已关闭会话，表现为确认框丢失或错位。
@@ -864,7 +903,7 @@ export class AgentManager {
 		return proc;
 	}
 
-	/** 注册本地事件监听器（供 FeishuBridge 等主进程内部模块使用） */
+	/** 注册本地事件监听器（供主进程内部模块使用） */
 	addLocalEventListener(listener: (agentId: string, event: unknown) => void): () => void {
 		this.localEventListeners.add(listener);
 		return () => { this.localEventListeners.delete(listener); };
@@ -882,7 +921,7 @@ export class AgentManager {
 	}
 
 	private handlePiEvent(agentId: string, event: unknown) {
-		// 通知本地监听器（FeishuBridge 等主进程内部订阅）
+		// 通知本地监听器
 		for (const listener of this.localEventListeners) {
 			try { listener(agentId, event); } catch {}
 		}
@@ -923,6 +962,7 @@ export class AgentManager {
 		}
 
 		if (typed.type === "agent_end") {
+			this.pendingUiSlashCommands.delete(agentId);
 			// 即使 runtime 已被清理（如用户快速切换/停止 agent），仍需向会话写入错误提示，
 			// 否则用户会看到发送后完全空白、没有任何反馈。
 			if (runtime) {
@@ -1081,25 +1121,58 @@ export class AgentManager {
 			runtime.tab.status = "running";
 			this.emitState();
 		}
-		this.trackAndEmitServerRequest(agentId, request);
+		let origin: AgentServerRequest["origin"] | undefined;
+		if (request.type === "extension_ui_request") {
+			const pendingUiSlash = this.pendingUiSlashCommands.get(agentId);
+			if (pendingUiSlash) {
+				pendingUiSlash.sawUiRequest = true;
+				origin = "uiSlashCommand";
+				this.removePendingUiSlashMessage(agentId, pendingUiSlash.command);
+			}
+		}
+		this.trackAndEmitServerRequest(agentId, request, origin);
 	}
 
-	private trackAndEmitServerRequest(agentId: string, request: RpcServerRequest) {
+	private trackAndEmitServerRequest(
+		agentId: string,
+		request: RpcServerRequest,
+		origin?: AgentServerRequest["origin"],
+	) {
 		const requests = this.pendingServerRequests.get(agentId) ?? new Map<string, RpcServerRequest>();
 		requests.set(String(request.id), request);
 		this.pendingServerRequests.set(agentId, requests);
+		const viewRequest = toAgentServerRequest(agentId, request);
+		if (origin) viewRequest.origin = origin;
 		this.emit(ipcChannels.agentsEvent, {
 			agentId,
 			event: {
 				type: "server_request",
-				request: toAgentServerRequest(agentId, request),
+				request: viewRequest,
 			},
 		});
 	}
 
+	private removePendingUiSlashMessage(agentId: string, command: string) {
+		const list = this.messages.get(agentId);
+		if (!list) return false;
+		const lastUserIndex = [...list]
+			.map((message, index) => ({ message, index }))
+			.reverse()
+			.find(({ message }) => message.role === "user")?.index;
+		if (lastUserIndex == null) return false;
+		if (list[lastUserIndex]?.text.trim() !== command) return false;
+		const nextMessages = list.filter((_, index) => index !== lastUserIndex);
+		this.messages.set(agentId, nextMessages);
+		this.refreshAutoTitle(agentId);
+		this.emit(ipcChannels.agentsMessage, { agentId, messages: nextMessages });
+		return true;
+	}
+
 	private cancelServerRequest(agentId: string, requestId: string) {
 		const requests = this.pendingServerRequests.get(agentId);
+		const request = requests?.get(requestId);
 		const hadRequest = requests?.delete(requestId) === true;
+		if (request?.type === "extension_ui_request") this.pendingUiSlashCommands.delete(agentId);
 		if (requests?.size === 0) this.pendingServerRequests.delete(agentId);
 		if (hadRequest) {
 			this.emit(ipcChannels.agentsEvent, {

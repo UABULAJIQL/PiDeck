@@ -126,7 +126,11 @@ export function createBrowserApi(): PiDesktopApi {
 			prompt: async (input: SendPromptInput) => {
 				await request(`/api/agents/${encodeURIComponent(input.agentId)}/prompt`, {
 					method: "POST",
-					body: JSON.stringify({ message: input.message, streamingBehavior: input.streamingBehavior }),
+					body: JSON.stringify({
+						message: input.message,
+						streamingBehavior: input.streamingBehavior,
+						uiSlashCommand: input.uiSlashCommand,
+					}),
 				});
 				await refreshState();
 			},

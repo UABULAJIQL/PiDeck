@@ -31,10 +31,6 @@ import type {
 	AppSettings,
 	AppWindowBounds,
 	CreateAgentInput,
-	FeishuBotConfig,
-	FeishuBridgeStatus,
-	FeishuConnectInput,
-	FeishuTestResult,
 	SendPromptInput,
 	CreatePiSkillInput,
 } from "../shared/types";
@@ -44,6 +40,7 @@ import { AgentManager } from "./pi/AgentManager";
 import { PiLocator } from "./pi/PiLocator";
 import { testPiProxy } from "./pi/PiProxyTester";
 import { SessionScanner } from "./sessions/SessionScanner";
+import { SessionPinStore } from "./sessions/SessionPinStore";
 import { CodexSessionImporter } from "./sessions/CodexSessionImporter";
 import { ClaudeSessionImporter } from "./sessions/ClaudeSessionImporter";
 import { SettingsStore } from "./settings/SettingsStore";
@@ -54,19 +51,10 @@ import { TerminalSessionManager } from "./terminal/TerminalSessionManager";
 import { TelemetryService } from "./telemetry/TelemetryService";
 import { SkillManager } from "./skills/SkillManager";
 import { ExtensionManager } from "./extensions/ExtensionManager";
+import { RemarkStore } from "./metadata/RemarkStore";
 import { PiUpdateChecker } from "./pi/PiUpdateChecker";
 import { checkForAppUpdate, RELEASES_URL } from "./update/AppUpdateChecker";
 import { WebServiceManager } from "./web/WebServiceManager";
-import { FeishuBridge } from "./feishu/FeishuBridge";
-import {
-	listBots,
-	getBot,
-	addBot as addFeishuBot,
-	removeBot as removeFeishuBot,
-	updateBot as updateFeishuBot,
-	getDecryptedBotAppSecret,
-} from "./feishu/FeishuConfig";
-import type { FeishuChatBinding } from "../shared/types";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -76,6 +64,7 @@ let isQuitting = false;
 let projectStore: ProjectStore;
 let fileSystemService: FileSystemService;
 let sessionScanner: SessionScanner;
+let sessionPinStore: SessionPinStore;
 let codexSessionImporter: CodexSessionImporter;
 let claudeSessionImporter: ClaudeSessionImporter;
 let settingsStore: SettingsStore;
@@ -85,10 +74,10 @@ let agentManager: AgentManager;
 let configManager: ConfigManager;
 let skillManager: SkillManager;
 let extensionManager: ExtensionManager;
+let remarkStore: RemarkStore;
 let piUpdateChecker: PiUpdateChecker;
 let webServiceManager: WebServiceManager;
 let terminalManager: TerminalSessionManager;
-let feishuBridge: FeishuBridge | null = null;
 
 const POSTHOG_PROJECT_KEY =
 	process.env.POSTHOG_PROJECT_KEY ??
@@ -539,172 +528,6 @@ function createWindow() {
 	}
 }
 
-// ===== 飞书桥接 IPC =====
-
-/** 自动连接：启动时检查已保存的 Bot 配置，自动连接 */
-async function autoConnectFeishu() {
-	const bots = listBots();
-	if (bots.length === 0) return;
-	const bot = bots.find((b) => b.enabled);
-	if (!bot) return;
-	// 不再自动连接，由用户手动在配置页点击连接
-	// 避免应用重启后静默恢复连接导致用户困惑
-	console.log("[飞书] 检测到已保存的 Bot 配置:", bot.name, "(跳过自动连接，需手动连接)");
-}
-
-function registerFeishuIpc() {
-	// 连接飞书
-	ipcMain.handle(ipcChannels.feishuConnect, async (_event, input: FeishuConnectInput) => {
-		console.log("[Feishu] 收到连接请求", JSON.stringify({ appId: input.appId?.slice(0, 8) + "...", name: input.name }));
-		try {
-			if (feishuBridge) {
-				console.log("[Feishu] 停止旧 bridge 状态:", JSON.stringify(feishuBridge.getStatus()));
-				feishuBridge.stop();
-			}
-
-			const botConfig = addFeishuBot({
-				name: input.name || "飞书机器人",
-				appId: input.appId,
-				appSecret: input.appSecret,
-				defaultUserOpenId: input.defaultUserOpenId,
-			});
-
-			feishuBridge = new FeishuBridge(botConfig, agentManager, () => mainWindow, () => projectStore.list());
-			await feishuBridge.start();
-			console.log("[Feishu] 连接成功，状态:", JSON.stringify(feishuBridge.getStatus()));
-			return { success: true, message: "连接成功" };
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error("[Feishu] 连接失败:", message);
-			return { success: false, message };
-		}
-	});
-
-	// 断开连接
-	ipcMain.handle(ipcChannels.feishuDisconnect, async () => {
-		console.log("[Feishu] 收到断开请求");
-		if (feishuBridge) {
-			console.log("[Feishu] 停止 bridge，此前状态:", JSON.stringify(feishuBridge.getStatus()));
-			feishuBridge.stop();
-			feishuBridge = null;
-			console.log("[Feishu] bridge 已置 null");
-		}
-		return { success: true };
-	});
-
-	// 查询状态
-	ipcMain.handle(ipcChannels.feishuStatusRequest, async () => {
-		if (feishuBridge) {
-			const s = feishuBridge.getStatus();
-			console.log("[Feishu] 状态查询:", JSON.stringify(s));
-			return s;
-		}
-		console.log("[Feishu] 状态查询: bridge 为 null，返回 disconnected");
-		return { status: "disconnected", activeBindings: 0 } as FeishuBridgeStatus;
-	});
-
-	// Bot 列表
-	ipcMain.handle(ipcChannels.feishuBotsList, async () => {
-		return listBots();
-	});
-
-	// 添加 Bot
-	ipcMain.handle(ipcChannels.feishuBotAdd, async (_event, input: FeishuConnectInput) => {
-		// 同 feishuConnect，但可以添加多个 Bot
-		try {
-			const botConfig = addFeishuBot({
-				name: input.name || "飞书机器人",
-				appId: input.appId,
-				appSecret: input.appSecret,
-				defaultUserOpenId: input.defaultUserOpenId,
-			});
-			return { success: true, bot: botConfig };
-		} catch (error) {
-			return { success: false, error: error instanceof Error ? error.message : String(error) };
-		}
-	});
-
-	// 删除 Bot
-	ipcMain.handle(ipcChannels.feishuBotRemove, async (_event, botId: string) => {
-		if (feishuBridge) {
-			feishuBridge.stop();
-			feishuBridge = null;
-		}
-		return removeFeishuBot(botId);
-	});
-
-	// 更新 Bot 配置
-	ipcMain.handle(ipcChannels.feishuBotConfig, async (_event, botId: string, patch: Partial<FeishuBotConfig>) => {
-		const updated = updateFeishuBot(botId, patch);
-		// 热更新到运行中的 bridge，无需重连
-		if (feishuBridge && feishuBridge.getStatus().status === "connected") {
-			feishuBridge.updateBotConfig(patch);
-			console.log("[飞书] 配置已热更新:", Object.keys(patch).join(", "));
-		}
-		return updated;
-	});
-
-	// 测试连接
-	ipcMain.handle(ipcChannels.feishuTestConnection, async (_event, appId: string, appSecret: string) => {
-		// 创建临时 bridge 实例来测试连接
-		const testBridge = new FeishuBridge(
-			{
-				id: "test",
-				name: "测试",
-				enabled: true,
-				appId,
-				appSecret: "", // 将在 testConnection 中传入
-			},
-			agentManager,
-			() => mainWindow,
-			() => projectStore.list(),
-		);
-		return testBridge.testConnection(appId, appSecret);
-	});
-
-	// 绑定列表
-	ipcMain.handle(ipcChannels.feishuBindingsList, async () => {
-		if (feishuBridge) {
-			return feishuBridge.listBindings();
-		}
-		return [];
-	});
-
-	// 移除绑定
-	ipcMain.handle(ipcChannels.feishuBindingRemove, async (_event, chatId: string) => {
-		if (feishuBridge) {
-			return feishuBridge.removeBinding(chatId);
-		}
-		return false;
-	});
-
-	// 更新绑定
-	ipcMain.handle(ipcChannels.feishuBindingUpdate, async (_event, chatId: string, patch: Partial<FeishuChatBinding>) => {
-		if (feishuBridge) {
-			return feishuBridge.updateBinding(chatId, patch);
-		}
-		return undefined;
-	});
-
-	// 通过已保存的 Bot ID 连接（自动解密 Secret）
-	ipcMain.handle(ipcChannels.feishuConnectByBot, async (_event, botId: string) => {
-		try {
-			if (feishuBridge) {
-				feishuBridge.stop();
-			}
-			const botConfig = getBot(botId);
-			if (!botConfig) {
-				return { success: false, message: "Bot 配置不存在" };
-			}
-			feishuBridge = new FeishuBridge(botConfig, agentManager, () => mainWindow, () => projectStore.list());
-			await feishuBridge.start();
-			return { success: true, message: "连接成功" };
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			return { success: false, message };
-		}
-	});
-}
 
 function registerIpc() {
 	ipcMain.handle(ipcChannels.projectsList, () => projectStore.list());
@@ -712,12 +535,20 @@ function registerIpc() {
 		projectStore.chooseAndAdd(),
 	);
 	ipcMain.handle(ipcChannels.projectsRemove, async (_event, id: string) => {
-		await projectStore.remove(id);
+		const removed = await projectStore.remove(id);
+		if (removed) await sessionPinStore.removeProject(id);
 		return projectStore.list();
 	});
 	ipcMain.handle(
 		ipcChannels.projectsReorder,
 		(_event, projectIds: string[]) => projectStore.reorder(projectIds),
+	);
+	ipcMain.handle(
+		ipcChannels.projectsTogglePinned,
+		async (_event, projectId: string) => {
+			await projectStore.togglePinned(projectId);
+			return projectStore.list();
+		},
 	);
 
 	ipcMain.handle(ipcChannels.filesList, async (_event, projectId: string) => {
@@ -766,7 +597,14 @@ function registerIpc() {
 		ipcChannels.sessionsList,
 		async (_event, projectId?: string) => {
 			const project = projectId ? projectStore.get(projectId) : undefined;
-			return sessionScanner.list(project?.path);
+			const sessions = await sessionScanner.list(project?.path);
+			return projectId ? sessionPinStore.decorate(projectId, sessions) : sessions;
+		},
+	);
+	ipcMain.handle(
+		ipcChannels.sessionsTogglePinned,
+		async (_event, projectId: string, filePath: string) => {
+			await sessionPinStore.toggle(projectId, filePath);
 		},
 	);
 	ipcMain.handle(
@@ -885,9 +723,13 @@ function registerIpc() {
 		version: app.getVersion(),
 		releasesUrl: RELEASES_URL,
 	}));
-	ipcMain.handle(ipcChannels.appCheckUpdate, () =>
-		checkForAppUpdate(settingsStore.get().installationType),
-	);
+	ipcMain.handle(ipcChannels.appCheckUpdate, () => {
+		const settings = settingsStore.get();
+		return checkForAppUpdate(
+			settings.installationType,
+			settings.appUpdateSkippedVersion,
+		);
+	});
 	ipcMain.handle(ipcChannels.appFeedbackEnvironment, async () => {
 		// 反馈报告只包含诊断必需的运行时版本与 pi 检测结果，不读取配置密钥或会话内容。
 		const pi = await piLocator.check();
@@ -1003,46 +845,57 @@ function registerIpc() {
 		() => testPiProxy(settingsStore.get()),
 	);
 
-	ipcMain.handle(ipcChannels.skillsList, () => skillManager.list());
-	ipcMain.handle(ipcChannels.skillsCreate, (_event, input: CreatePiSkillInput) =>
-		skillManager.create(input),
-	);
-	ipcMain.handle(ipcChannels.skillsToggle, (_event, path: string, enabled: boolean) =>
-		skillManager.toggle(path, enabled),
-	);
+	ipcMain.handle(ipcChannels.skillsList, async () => {
+		const result = await skillManager.list();
+		return { ...result, skills: remarkStore.applySkills(result.skills) };
+	});
+	ipcMain.handle(ipcChannels.skillsCreate, async (_event, input: CreatePiSkillInput) => {
+		const skill = await skillManager.create(input);
+		return { ...skill, remark: remarkStore.getSkillRemark(skill.id) };
+	});
+	ipcMain.handle(ipcChannels.skillsToggle, async (_event, path: string, enabled: boolean) => {
+		const skill = await skillManager.toggle(path, enabled);
+		return { ...skill, remark: remarkStore.getSkillRemark(skill.id) };
+	});
 	ipcMain.handle(ipcChannels.skillsDelete, (_event, path: string) =>
 		skillManager.delete(path),
 	);
 	ipcMain.handle(ipcChannels.skillsOpenFolder, (_event, path?: string) =>
 		skillManager.openFolder(path),
 	);
-	ipcMain.handle(ipcChannels.extensionsList, (_event, projectPath?: string) =>
-		extensionManager.list(projectPath),
-	);
+	ipcMain.handle(ipcChannels.skillsEditRemark, async (_event, skillId: string, remark: string) => {
+		await remarkStore.setSkillRemark(skillId, remark);
+	});
+	ipcMain.handle(ipcChannels.extensionsList, async (_event, projectPath?: string) => {
+		const result = await extensionManager.list(projectPath);
+		return { ...result, extensions: remarkStore.applyExtensions(result.extensions) };
+	});
 	ipcMain.handle(
 		ipcChannels.extensionsToggle,
-		(_event, source: string, enabled: boolean, scope?: "user" | "project" | "unknown", projectPath?: string) =>
-			extensionManager.setEnabled(source, scope, enabled, projectPath),
+		async (_event, source: string, enabled: boolean, scope?: "user" | "project" | "unknown", projectPath?: string) => {
+			await extensionManager.setEnabled(source, scope, enabled, projectPath);
+		},
 	);
 	ipcMain.handle(
 		ipcChannels.extensionsUninstall,
-		(_event, source: string, scope?: "user" | "project" | "unknown", projectPath?: string) =>
-			extensionManager.uninstall(source, scope, projectPath),
+		async (_event, source: string, scope?: "user" | "project" | "unknown", projectPath?: string) => {
+			await extensionManager.uninstall(source, scope, projectPath);
+		},
 	);
-	ipcMain.handle(ipcChannels.extensionsInstall, (_event, source: string) =>
+	ipcMain.handle(ipcChannels.extensionsInstall, async (_event, source: string) =>
 		extensionManager.install(source),
 	);
+	ipcMain.handle(ipcChannels.extensionsEditRemark, async (_event, extensionId: string, remark: string) => {
+		await remarkStore.setExtensionRemark(extensionId, remark);
+	});
 
 	ipcMain.handle(ipcChannels.agentsList, () => agentManager.list());
 	ipcMain.handle(ipcChannels.agentsCreate, async (_event, input: CreateAgentInput) => {
-		const tab = await agentManager.create(input);
-		// Session Mirror: Pi 中创建会话时，飞书自动拉群（1会话=1群）
-		if (feishuBridge && feishuBridge.getStatus().status === "connected") {
-			void feishuBridge.ensureSessionMirror(tab.id, tab.title, tab.sessionPath).catch((e) => {
-				console.error("[飞书] 自动拉群失败:", e);
-			});
-		}
-		return tab;
+		return agentManager.create(input);
+	});
+	ipcMain.handle(ipcChannels.agentsUndoMessage, async (_event, agentId: string, messageId: string) => {
+		const removed = await agentManager.undoUserMessage(agentId, messageId);
+		return removed ? { text: removed.text, images: removed.images } : null;
 	});
 	ipcMain.handle(
 		ipcChannels.agentsRename,
@@ -1054,33 +907,9 @@ function registerIpc() {
 		await agentManager.stop(agentId);
 	});
 	ipcMain.handle(ipcChannels.agentsPrompt, async (_event, input: SendPromptInput) => {
-		// Session Mirror: Pi 中发消息时，为飞书群开启流式卡片 + 转发用户消息
-		if (feishuBridge && feishuBridge.getStatus().status === "connected") {
-			const tab = agentManager.list().find(t => t.id === input.agentId);
-			if (tab) {
-				// 1. 确保有飞书群绑定（如果还没有，自动拉群）
-				void feishuBridge.ensureSessionMirror(tab.id, tab.title, tab.sessionPath).catch((e) => {
-					console.error("[飞书] ensureSessionMirror 失败:", e);
-				});
-				// 2. 开启流式卡片
-				void feishuBridge.startSessionMirrorRun(tab.id, tab.title, tab.sessionPath).catch((e) => {
-					console.error("[飞书] SessionMirror 流式卡片初始化失败:", e);
-				});
-				// 3. 转发用户消息到飞书（双向同步）
-				if (input.message.trim()) {
-					void feishuBridge.forwardUserMessageToFeishu(tab.id, input.message).catch((e) => {
-						console.error("[飞书] 转发 PiDeck 消息失败:", e);
-					});
-				}
-			}
-		}
 		return agentManager.sendPrompt(input);
 	});
 	ipcMain.handle(ipcChannels.agentsAbort, async (_event, agentId: string) => {
-		// Session Mirror: 停止飞书流式卡片
-		if (feishuBridge) {
-			feishuBridge.stopSessionMirrorRun(agentId);
-		}
 		return agentManager.abort(agentId);
 	});
 	ipcMain.handle(
@@ -1277,6 +1106,8 @@ app.whenReady().then(async () => {
 	projectStore = new ProjectStore();
 	fileSystemService = new FileSystemService();
 	sessionScanner = new SessionScanner();
+	remarkStore = new RemarkStore();
+	sessionPinStore = new SessionPinStore();
 	codexSessionImporter = new CodexSessionImporter();
 	claudeSessionImporter = new ClaudeSessionImporter();
 	settingsStore = new SettingsStore();
@@ -1333,16 +1164,14 @@ app.whenReady().then(async () => {
 	);
 
 	await settingsStore.load();
+	await sessionPinStore.load();
+	await remarkStore.load();
 	await applyDesktopProxy(settingsStore.get());
 	await webServiceManager.applySettings(settingsStore.get()).catch((error) => {
 		console.error("Failed to start web service:", error);
 		void settingsStore.update({ webServiceEnabled: false });
 	});
 	registerIpc();
-	registerFeishuIpc();
-
-	// 🆕 自动连接：如果已有 Bot 配置，自动启动飞书连接
-	autoConnectFeishu();
 
 	sendTelemetryHeartbeat();
 	createWindow();

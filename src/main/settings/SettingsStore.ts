@@ -25,6 +25,7 @@ const defaultSettings: AppSettings = {
   webServiceEnabled: false,
   webServiceHost: "0.0.0.0",
   webServicePort: 8765,
+  appUpdateSkippedVersion: undefined,
   rpcTimeout: 600_000,
   linkOpenMode: "external",
   maxEditorFileSizeMB: 5,

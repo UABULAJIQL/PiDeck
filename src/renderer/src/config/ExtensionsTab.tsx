@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PiExtensionListResult, PiExtensionSummary, PiPackageInfo } from "../../../shared/types";
 import { t } from "../i18n";
+import { useConfigRemarkEditor } from "./ConfigRemarkEditor";
 
 const api = window.piDesktop.extensions;
 
@@ -57,6 +58,7 @@ export function ExtensionsTab(props: {
 	onRefresh: () => void;
 	onToggle: (extension: PiExtensionSummary, enabled: boolean) => void;
 	onUninstall: (extension: PiExtensionSummary) => void;
+	onEditRemark: (extension: PiExtensionSummary, remark: string) => void;
 }) {
 	const [installing, setInstalling] = useState<string | null>(null);
 
@@ -74,12 +76,11 @@ export function ExtensionsTab(props: {
 
 	return (
 		<div className="extensions-tab">
-			{/* 预设推荐扩展 — 大列表简洁显示 */}
-			<div className="config-section" style={{ marginBottom: 20 }}>
+			<div className="config-section extensions-recommended-section">
 				<div className="config-toolbar">
 					<span className="config-count">{t("config.recommendedPackages")}</span>
 				</div>
-				<p className="config-im-form-hint" style={{ marginBottom: 12 }}>
+				<p className="extensions-hint">
 					{t("config.recommendedPackagesHint")}
 				</p>
 				<div className="extensions-recommended-list">
@@ -95,7 +96,7 @@ export function ExtensionsTab(props: {
 							<div className="extensions-recommended-info">
 								<div className="extensions-recommended-name">
 									<strong>{pkg.name}</strong>
-									{alreadyInstalled && <span className="config-im-connected-badge" style={{ marginLeft: 8 }}>{t("config.installed")}</span>}
+									{alreadyInstalled && <span className="extensions-installed-badge">{t("config.installed")}</span>}
 								</div>
 								<div className="extensions-recommended-desc">
 									{pkg.description}
@@ -122,7 +123,6 @@ export function ExtensionsTab(props: {
 
 			<hr className="extensions-divider" />
 
-			{/* 已安装扩展列表 */}
 			<div className="config-section">
 				<h3 className="extensions-installed-title">{t("config.installedExtensions")}</h3>
 				<div className="config-toolbar" style={{ marginTop: 8 }}>
@@ -153,6 +153,7 @@ export function ExtensionsTab(props: {
 								uninstalling={props.uninstallingSource === extension.source}
 								onToggle={props.onToggle}
 								onUninstall={props.onUninstall}
+								onEditRemark={props.onEditRemark}
 							/>
 						))
 					)}
@@ -169,11 +170,16 @@ function ExtensionCard(props: {
 	uninstalling: boolean;
 	onToggle: (extension: PiExtensionSummary, enabled: boolean) => void;
 	onUninstall: (extension: PiExtensionSummary) => void;
+	onEditRemark: (extension: PiExtensionSummary, remark: string) => void | Promise<void>;
 }) {
 	const { extension } = props;
 	const name = extension.source.replace(/^(?:npm|file|github|git):/i, "");
 	const projectScopedToggle = extension.scope === "project";
 	const projectScopedUnavailable = projectScopedToggle && !props.projectPath;
+	const remarkEditor = useConfigRemarkEditor({
+		remark: extension.remark,
+		onSave: (remark) => props.onEditRemark(extension, remark),
+	});
 	return (
 		<article className="session-card skill-card extension-card">
 			<div className="session-card-display">
@@ -191,10 +197,12 @@ function ExtensionCard(props: {
 							</span>
 						</div>
 					</div>
+					{remarkEditor.content}
 					<small>{extension.source}</small>
 					{extension.path && <small>{extension.path}</small>}
 				</div>
 				<div className="session-card-actions skill-card-actions">
+					{remarkEditor.actions}
 					<button
 						className="session-rename-button"
 						disabled={projectScopedUnavailable || props.toggling || props.uninstalling}

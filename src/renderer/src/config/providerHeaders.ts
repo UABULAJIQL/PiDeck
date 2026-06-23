@@ -50,7 +50,6 @@ export function setHeaderValue(
 }
 
 // pi provider 的 api 字段必须使用官方 registry 名称；openai-completions 实际对应 Chat Completions。
-// 不再把历史别名 openai-chat-completions 作为预设暴露，避免测试通过但 pi 会话启动失败。
 export const PROVIDER_API_OPTIONS = [
 	"openai-completions",
 	"openai-responses",

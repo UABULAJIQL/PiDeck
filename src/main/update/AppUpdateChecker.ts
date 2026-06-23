@@ -127,6 +127,7 @@ function selectRecommendedAsset(
 
 export async function checkForAppUpdate(
 	installationType?: "portable" | "installed",
+	skippedVersion?: string,
 ): Promise<AppUpdateInfo> {
 	const currentVersion = app.getVersion();
 	const response = await fetch(LATEST_RELEASE_API, {
@@ -144,11 +145,14 @@ export async function checkForAppUpdate(
 		url: asset.browser_download_url,
 		size: asset.size,
 	}));
+	const hasNewerVersion = isNewerVersion(latestVersion, currentVersion);
+	// “跳过此版本”只屏蔽当前这一个 release，后续更高版本仍然需要继续提醒。
+	const hasUpdate = hasNewerVersion && skippedVersion !== latestVersion;
 
 	return {
 		currentVersion,
 		latestVersion,
-		hasUpdate: isNewerVersion(latestVersion, currentVersion),
+		hasUpdate,
 		releaseName: release.name || `v${latestVersion}`,
 		releaseNotes: release.body || "",
 		releaseUrl: release.html_url || RELEASES_URL,

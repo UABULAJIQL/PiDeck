@@ -176,6 +176,14 @@ export function createPreviewApi(): PiDesktopApi {
 				projects.sort((a, b) => projectIds.indexOf(a.id) - projectIds.indexOf(b.id));
 				return projects;
 			},
+			togglePinned: async (projectId) => {
+				const project = projects.find((item) => item.id === projectId);
+				if (project && project.kind !== "chat") project.pinned = !project.pinned;
+				projects.sort((a, b) =>
+					Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.lastOpenedAt - a.lastOpenedAt,
+				);
+				return projects;
+			},
 			onChanged: noop,
 		},
 		files: {
@@ -196,6 +204,7 @@ export function createPreviewApi(): PiDesktopApi {
 			}),
 			exportHtml: async () => ({ path: "preview-session.html" }),
 			delete: async () => undefined,
+			togglePinned: async () => undefined,
 		},
 		codexSessions: {
 			scan: async () => [],
@@ -320,6 +329,7 @@ export function createPreviewApi(): PiDesktopApi {
 			}),
 			delete: async () => undefined,
 			openFolder: async () => undefined,
+			editRemark: async () => undefined,
 		},
 		extensions: {
 			list: async (_projectPath?: string) => ({
@@ -337,6 +347,7 @@ export function createPreviewApi(): PiDesktopApi {
 			toggle: async () => undefined,
 			uninstall: async () => undefined,
 			install: async (_source: string) => "",
+			editRemark: async () => undefined,
 		},
 		settings: {
 			get: async (): Promise<AppSettings> => ({ ...previewSettings }),
@@ -415,6 +426,10 @@ export function createPreviewApi(): PiDesktopApi {
 				title: previewAgentTitle ?? t("preview.agentTitle"),
 				status: "idle" as const,
 				createdAt: Date.now(),
+			}),
+			undoMessage: async () => ({
+				text: "Preview prompt",
+				images: [],
 			}),
 			compact: async () => ({
 				modelName: "Preview GPT",
@@ -506,23 +521,6 @@ export function createPreviewApi(): PiDesktopApi {
 					terminalExitListeners.delete(callback);
 				};
 			},
-		},
-		feishu: {
-			connect: async () => ({ success: true, message: "预览模式" }),
-			disconnect: async () => ({ success: true }),
-			connectByBot: async () => ({ success: false, message: "预览模式不支持" }),
-			statusRequest: async () => ({ status: "disconnected" as const, activeBindings: 0 }),
-			onStatus: () => () => {},
-			botsList: async () => [],
-			botAdd: async () => ({ success: false, error: "预览模式不支持" }),
-			botRemove: async () => false,
-			botConfig: async () => undefined,
-			testConnection: async () => ({ success: false, message: "预览模式不支持" }),
-			bindingsList: async () => [],
-			bindingRemove: async () => false,
-			bindingUpdate: async () => undefined,
-			onMessages: () => () => {},
-			onBindingsChanged: () => () => {},
 		},
 	};
 }

@@ -103,10 +103,11 @@ import {
   type SessionModifiedFile,
 } from "./components/app/AppParts";
 import { FileDiffViewer } from "./components/app/FileDiffViewer";
-import type {
-  AgentRuntimeState,
-  AgentServerRequest,
-  AgentTab,
+import {
+  compareSessionsForDisplay,
+  type AgentRuntimeState,
+  type AgentServerRequest,
+  type AgentTab,
   AppInfo,
   AppSettings,
   AppUpdateInfo,
@@ -293,13 +294,10 @@ export function App() {
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [thinkingPickerOpen, setThinkingPickerOpen] = useState(false);
   const [sendBehaviorMenuOpen, setSendBehaviorMenuOpen] = useState(false);
-  const [sessionActionsOpen, setSessionActionsOpen] = useState(false);
   const [switchingBranch, setSwitchingBranch] = useState<string | null>(null);
   const [promptByAgent, setPromptByAgent] = useState<Record<string, string>>(
     {},
   );
-  /** 当前进行的操作类型,用于按钮 loading 状态 */
-  const [loadingAction, setLoadingAction] = useState<null | "restart">(null);
   const [attachedImagesByAgent, setAttachedImagesByAgent] = useState<
     Record<string, ImageContent[]>
   >({});
@@ -371,6 +369,20 @@ export function App() {
   } | null>(null);
   const [approvalRequest, setApprovalRequest] = useState<AgentServerRequest | null>(null);
   const [approvalBusy, setApprovalBusy] = useState(false);
+  const [pendingUiSlashCommandAgentId, setPendingUiSlashCommandAgentId] = useState<string | null>(null);
+  const pendingUiSlashCommandRef = useRef<{ agentId: string; command: string } | null>(null);
+
+  function stripPendingUiSlashMessages(agentId: string, messages: ChatMessage[]) {
+    const pending = pendingUiSlashCommandRef.current;
+    if (!pending || pending.agentId !== agentId) return messages;
+    const lastUserIndex = [...messages]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find(({ message }) => message.role === "user")?.index;
+    if (lastUserIndex == null) return messages;
+    if (messages[lastUserIndex]?.text.trim() !== pending.command.trim()) return messages;
+    return messages.filter((_, index) => index !== lastUserIndex);
+  }
   const [renamingFile, setRenamingFile] = useState<{
     path: string;
     name: string;
@@ -534,7 +546,6 @@ export function App() {
   // 已见过（即用户展开/收起过的）项目保留用户的选择不变。
   const seenProjectIdsRef = useRef<Set<string>>(new Set());
   const chatPaneRef = useRef<HTMLElement | null>(null);
-  const sessionComboRef = useRef<HTMLDivElement | null>(null);
   const chatHeaderRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLElement | null>(null);
   const timelineRef = useRef<HTMLElement | null>(null);
@@ -542,8 +553,6 @@ export function App() {
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingAgentsRef = useRef<AgentTab[]>([]);
   const projectDragPreventClickRef = useRef(false);
-
-  // ===== 飞书桥接 =====
 
   const activeProject = projects.find(
     (project) => project.id === activeProjectId,
@@ -647,8 +656,16 @@ export function App() {
     () => groupToolMessages(paginatedMessages),
     [paginatedMessages],
   );
+  const isUiSlashApprovalActive = Boolean(
+    pendingUiSlashCommandAgentId === activeAgentId ||
+    pendingUiSlashCommandRef.current?.agentId === activeAgentId ||
+    (approvalRequest?.agentId === activeAgentId &&
+      approvalRequest?.type === "extension_ui_request" &&
+      approvalRequest?.origin === "uiSlashCommand"),
+  );
   const isAwaitingAssistant = Boolean(
     activeAgent &&
+    !isUiSlashApprovalActive &&
     (activeAgent.status === "running" || activeRuntimeState?.isStreaming) &&
     activeMessages.at(-1)?.role !== "assistant",
   );
@@ -927,17 +944,21 @@ export function App() {
     // 优化:历史会话加载时消息更新频繁,只在消息真正变化时更新 state,避免不必要的重渲染导致输入卡顿
     const offMessages = api.agents.onMessages((payload) =>
       setMessagesByAgent((current) => {
+        const nextPayloadMessages = stripPendingUiSlashMessages(
+          payload.agentId,
+          payload.messages,
+        );
         const prevMessages = current[payload.agentId];
         // 消息数量相同且引用相同时跳过更新,减少输入框重渲染
         if (
-          prevMessages?.length === payload.messages.length &&
-          prevMessages === payload.messages
+          prevMessages?.length === nextPayloadMessages.length &&
+          prevMessages === nextPayloadMessages
         ) {
           return current;
         }
         return {
           ...current,
-          [payload.agentId]: payload.messages,
+          [payload.agentId]: nextPayloadMessages,
         };
       }),
     );
@@ -960,12 +981,40 @@ export function App() {
       if (event?.type === "server_request" && event.request) {
         setApprovalBusy(false);
         setApprovalRequest(event.request);
+        if (event.request.type === "extension_ui_request") {
+          const pendingUiSlash = pendingUiSlashCommandRef.current;
+          const shouldClearPendingUiSlash = Boolean(
+            event.request.origin === "uiSlashCommand" ||
+            (pendingUiSlash && pendingUiSlash.agentId === payload.agentId),
+          );
+          if (pendingUiSlash && pendingUiSlash.agentId === payload.agentId) {
+            setMessagesByAgent((current) => {
+              const agentMessages = current[payload.agentId] ?? [];
+              const trimmedCommand = pendingUiSlash.command.trim();
+              const lastUserIndex = [...agentMessages]
+                .map((message, index) => ({ message, index }))
+                .reverse()
+                .find(({ message }) => message.role === "user")?.index;
+              if (lastUserIndex == null) return current;
+              const lastUserMessage = agentMessages[lastUserIndex];
+              if (lastUserMessage.text.trim() !== trimmedCommand) return current;
+              const nextMessages = agentMessages.filter((_, index) => index !== lastUserIndex);
+              return {
+                ...current,
+                [payload.agentId]: nextMessages,
+              };
+            });
+          }
+          if (shouldClearPendingUiSlash) pendingUiSlashCommandRef.current = null;
+        }
         return;
       }
       if (event?.type === "server_request_cancelled") {
         setApprovalRequest((current) =>
           current?.requestId === event.requestId ? null : current,
         );
+        pendingUiSlashCommandRef.current = null;
+        setPendingUiSlashCommandAgentId(null);
         setApprovalBusy(false);
       }
     });
@@ -1313,17 +1362,6 @@ export function App() {
   }, [activeAgentId]);
 
   // 追踪 agent 会话开始/结束时间,计算会话时长
-  // 点击外部区域自动关闭会话组合下拉
-  useEffect(() => {
-    if (!sessionActionsOpen) return;
-    const handler = (event: MouseEvent) => {
-      if (sessionComboRef.current && !sessionComboRef.current.contains(event.target as Node)) {
-        setSessionActionsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [sessionActionsOpen]);
 
   useEffect(() => {
     for (const agent of displayAgents) {
@@ -1644,6 +1682,8 @@ export function App() {
         approvalRequest.requestId,
         response,
       );
+      pendingUiSlashCommandRef.current = null;
+      setPendingUiSlashCommandAgentId(null);
       setApprovalRequest(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1689,6 +1729,25 @@ export function App() {
     }
   }
 
+  async function skipCurrentAppUpdate(info: AppUpdateInfo | null = updateInfo) {
+    if (!info) return;
+    try {
+      // 只记录当前 latestVersion，主进程检查更新时会放过更高版本继续提醒。
+      const next = await api.settings.update({
+        appUpdateSkippedVersion: info.latestVersion,
+      });
+      setSettings(next);
+      setUpdateInfo(null);
+      setSettingsNotice(
+        t("update.skippedNotice", { version: info.latestVersion }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSettingsNotice(t("app.updateFailedNotice", { error: message }));
+      showToast(t("app.updateFailed"));
+    }
+  }
+
   async function checkPiUpdateNotice() {
     try {
       const next = await api.pi.checkUpdates();
@@ -1724,7 +1783,7 @@ export function App() {
 
   async function refreshSessions(projectId = activeProjectId) {
     const next = await api.sessions.list(projectId);
-    setSessions([...next].sort((a, b) => b.updatedAt - a.updatedAt));
+    setSessions([...next].sort(compareSessionsForDisplay));
   }
 
   async function refreshProjectSessions(projectId: string) {
@@ -1734,7 +1793,7 @@ export function App() {
     }));
     try {
       const next = await api.sessions.list(projectId);
-      const sorted = [...next].sort((a, b) => b.updatedAt - a.updatedAt);
+      const sorted = [...next].sort(compareSessionsForDisplay);
       setSessionsByProject((current) => ({
         ...current,
         [projectId]: sorted,
@@ -1849,10 +1908,12 @@ export function App() {
     showToast(t("app.exportedPath", { path: result.path }), 3500);
   }
 
-  async function deleteHistorySession(session: SessionSummary) {
+  async function deleteHistorySession(
+    session: SessionSummary,
+    projectId = sessionsProjectId ?? activeProjectId,
+  ) {
     await api.sessions.delete(session.filePath);
     showToast(t("app.sessionDeleted"), 2200);
-    const projectId = sessionsProjectId ?? activeProjectId;
     await refreshSessions(projectId);
     if (projectId) await refreshProjectSessions(projectId);
   }
@@ -2386,15 +2447,6 @@ export function App() {
       setRuntimeStateByAgent((current) => ({ ...current, [agentId]: state }));
   }
 
-  async function cycleModel() {
-    if (!activeAgentId || isPendingAgentId(activeAgentId)) return;
-    const state = await api.agents.cycleModel(activeAgentId);
-    setRuntimeStateByAgent((current) => ({
-      ...current,
-      [activeAgentId]: state,
-    }));
-  }
-
   async function openModelPicker() {
     if (!activeAgentId || isPendingAgentId(activeAgentId)) return;
     const models = await api.agents.availableModels(activeAgentId);
@@ -2498,6 +2550,16 @@ export function App() {
       showToast(t("app.exportedPath", { path: result.path }), 3500);
     } finally {
       setAgentActionLoading(null);
+      setAgentMenu(null);
+    }
+  }
+
+  async function restartAgent(agentId: string) {
+    try {
+      const tab = await api.agents.restart(agentId);
+      setActiveAgentId(tab.id);
+      void refreshRuntimeState(tab.id);
+    } finally {
       setAgentMenu(null);
     }
   }
@@ -2636,7 +2698,7 @@ export function App() {
     }
 
     if (stage.command === "restart") {
-      await api.agents.restart(activeAgentId);
+      await restartAgent(activeAgentId);
       return;
     }
 
@@ -2828,9 +2890,10 @@ export function App() {
 
   /** 判断 agent 是否处于忙碌状态(正在处理消息或流式输出中) */
   const isAgentStarting = activeAgent?.status === "starting";
-  const composerDisabled = !activeAgent || isAgentStarting;
+  const composerDisabled = !activeAgent || isAgentStarting || isUiSlashApprovalActive;
   const isAgentBusy = Boolean(
     activeAgent &&
+    !isUiSlashApprovalActive &&
     (activeAgent.status === "running" || activeRuntimeState?.isStreaming),
   );
 
@@ -2884,12 +2947,26 @@ ${text}
     }
   }, [isAgentBusy, activeAgentId, api.agents]);
 
+  function isExtensionSlashCommand(message: string) {
+    const commandName = message.trim().match(/^\/([a-zA-Z][\w-]*)/)?.[1]?.toLowerCase();
+    if (!commandName) return false;
+    return commands.some(
+      (command) =>
+        command.source === "extension" &&
+        command.name.toLowerCase() === commandName,
+    );
+  }
+
   async function sendPrompt() {
     const images = attachedImages.length > 0 ? attachedImages : undefined;
     await submitComposerPrompt(prompt, images);
   }
 
   async function submitComposerPrompt(message: string, images?: ImageContent[]) {
+    if (isUiSlashApprovalActive) {
+      showToast(t("app.uiSlashCommandPending"), 2200);
+      return;
+    }
     if (
       isAgentStarting ||
       !activeAgentId ||
@@ -2897,6 +2974,7 @@ ${text}
     )
       return;
 
+    const uiSlashCommand = !images?.length && isExtensionSlashCommand(message);
     const finalMessage = applyFirstMessagePrefix(message);
 
     // ── /goal 命令处理 ──
@@ -2907,7 +2985,7 @@ ${text}
     }
 
     // 保存到历史记录(只保存非空的文本命令)
-    if (message.trim() && !message.startsWith("!")) {
+    if (message.trim() && !message.startsWith("!") && !uiSlashCommand) {
       setCommandHistory((prev) => {
         // 避免重复保存相同的命令
         const filtered = prev.filter(cmd => cmd !== message.trim());
@@ -2928,7 +3006,19 @@ ${text}
     setAttachedImages([]);
     setSuggestionsOpen(false);
     setSendBehaviorMenuOpen(false);
-    await submitPromptSnapshot(activeAgentId, finalMessage, images);
+    pendingUiSlashCommandRef.current = uiSlashCommand
+      ? { agentId: activeAgentId, command: finalMessage }
+      : null;
+    if (uiSlashCommand) setPendingUiSlashCommandAgentId(activeAgentId);
+    try {
+      await submitPromptSnapshot(activeAgentId, finalMessage, images, undefined, uiSlashCommand);
+    } catch (error) {
+      pendingUiSlashCommandRef.current = null;
+      if (uiSlashCommand) setPendingUiSlashCommandAgentId(null);
+      throw error;
+    } finally {
+      if (uiSlashCommand) setPendingUiSlashCommandAgentId(null);
+    }
     void refreshRuntimeState(activeAgentId);
     void api.agents
       .commands(activeAgentId)
@@ -3063,6 +3153,7 @@ ${goalTextRef.current}
     message: string,
     images?: ImageContent[],
     streamingBehavior?: "steer" | "followUp",
+    uiSlashCommand?: boolean,
   ) {
     // 这里接收快照参数,让 composer 发送和历史消息"重新发送"共享同一条路径。
     // Agent 忙碌时显式使用官方 streamingBehavior=steer:消息会进入 pi 的运行中队列,
@@ -3077,6 +3168,7 @@ ${goalTextRef.current}
       message,
       images,
       ...(behavior ? { streamingBehavior: behavior } : {}),
+      ...(uiSlashCommand ? { uiSlashCommand: true } : {}),
     });
   }
 
@@ -3084,6 +3176,23 @@ ${goalTextRef.current}
     if (!activeAgentId || message.agentId !== activeAgentId) return;
     // "重新发送"按原消息快照再次提交,不修改输入框,图片也复用原始 base64 内容。
     void submitPromptSnapshot(activeAgentId, message.text, message.images);
+  }
+
+  function undoUserMessage(message: ChatMessage) {
+    if (!activeAgentId || message.agentId !== activeAgentId) return;
+    // 撤销不是单纯清空输入框，而是回退这条消息在当前会话视图中的位置，方便用户继续编辑后重发。
+    void api.agents.undoMessage(activeAgentId, message.id).then((payload) => {
+      if (!payload) return;
+      const text = payload.text;
+      setPrompt(text);
+      setAttachedImages(payload.images ?? []);
+      setSuggestionsOpen(true);
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLTextAreaElement>(".composer-box textarea")
+          ?.focus();
+      });
+    });
   }
 
 
@@ -3645,13 +3754,26 @@ ${goalTextRef.current}
             );
             const projectSessions = sessionsByProject[project.id] ?? [];
             const projectSearch = search.trim();
-            // 过滤掉已激活为 Agent 的历史会话,避免重复显示
+            const activeSessionSummary =
+              activeAgent?.projectId === project.id && activeAgent.sessionPath
+                ? projectSessions.find((session) =>
+                    isSameSessionPath(activeAgent.sessionPath, session.filePath),
+                  )
+                : undefined;
+            // 当当前激活会话已经有对应的历史 session 时，要把它放回下面的 session 区域，
+            // 否则它会继续占据上方 Agent 区的位置，视觉上永远压在置顶会话之上。
+            const projectAgentsForList = activeSessionSummary
+              ? projectAgents.filter((agent) => agent.id !== activeAgentId)
+              : projectAgents;
+            // 过滤掉仍然以 Agent 形式展示的历史会话，避免重复显示；
+            // 当前激活会话若已切回下方 session 区，则这里必须保留它参与分区排序。
             const activeAgentSessionPaths = new Set(
-              projectAgents
+              projectAgentsForList
                 .filter((agent) => agent.sessionPath)
                 .map((agent) => agent.sessionPath),
             );
-            // 左侧历史会话始终按最近更新时间倒序展示，不依赖主进程或导入源的返回顺序。
+            // 左侧项目树会在渲染前再次排序；这里必须复用置顶优先级，
+            // 否则即使主进程已经把 session 标记为 pinned，也会被这层时间排序重新压回中间位置。
             const visibleProjectSessions = [
               ...(projectSearch
                 ? projectSessions.filter((session) =>
@@ -3665,7 +3787,24 @@ ${goalTextRef.current}
               .filter(
                 (session) => !activeAgentSessionPaths.has(session.filePath),
               )
-              .sort((left, right) => right.updatedAt - left.updatedAt);
+              .sort(compareSessionsForDisplay);
+            const isActiveSidebarSession = (session: SessionSummary) =>
+              activeAgent?.projectId === project.id &&
+              isSameSessionPath(activeAgent.sessionPath, session.filePath);
+            const prioritizeActiveSession = (sessions: SessionSummary[]) => {
+              const activeSession = sessions.find(isActiveSidebarSession);
+              if (!activeSession) return sessions;
+              return [
+                activeSession,
+                ...sessions.filter((session) => session !== activeSession),
+              ];
+            };
+            const pinnedProjectSessions = prioritizeActiveSession(
+              visibleProjectSessions.filter((session) => session.pinned),
+            );
+            const normalProjectSessions = prioritizeActiveSession(
+              visibleProjectSessions.filter((session) => !session.pinned),
+            );
             const projectSessionsLoaded = Object.prototype.hasOwnProperty.call(
               sessionsByProject,
               project.id,
@@ -3674,20 +3813,52 @@ ${goalTextRef.current}
               sessionLoadingByProject[project.id],
             );
             const hasProjectChildren =
-              projectAgents.length > 0 ||
+              projectAgentsForList.length > 0 ||
               visibleProjectSessions.length > 0 ||
               projectSessionsLoading;
             const isCollapsed = collapsedProjects.has(project.id);
             const agentDisplay = getVisibleAgentsForProject(
-              projectAgents,
+              projectAgentsForList,
               expandedAgentProjects.has(project.id),
             );
-            const activeSessionShownAsAgent =
-              activeAgent?.projectId === project.id &&
-              activeAgent.sessionPath != null &&
-              agentDisplay.visibleAgents.some(
-                (agent) => agent.id === activeAgentId,
-              );
+            const renderProjectSessionButton = (session: SessionSummary) => (
+              <button
+                key={session.filePath}
+                className={
+                  isActiveSidebarSession(session)
+                    ? "conversation agent-row session-row active"
+                    : "conversation agent-row session-row"
+                }
+                title={session.filePath}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setSessionMenu({
+                    x: event.clientX,
+                    y: event.clientY,
+                    projectId: project.id,
+                    session,
+                  });
+                }}
+                onClick={() => void openSidebarSession(project.id, session)}
+              >
+                <span className="session-node-marker" aria-hidden="true" />
+                <div className="conversation-body">
+                  <div className="conversation-title">
+                    <strong>{session.name || t("common.untitled")}</strong>
+                    <time
+                      className="session-relative-time"
+                      dateTime={new Date(session.updatedAt).toISOString()}
+                      title={new Date(session.updatedAt).toLocaleString()}
+                    >
+                      {formatSidebarRelativeTime(
+                        session.updatedAt,
+                        relativeTimeNow,
+                      )}
+                    </time>
+                  </div>
+                </div>
+              </button>
+            );
             const isDraggingProject = draggingProjectId === project.id;
             const isProjectDropTarget = dragOverProjectId === project.id;
             const projectRowClass = [
@@ -3862,56 +4033,18 @@ ${goalTextRef.current}
                         </span>
                       </button>
                     )}
-                    {visibleProjectSessions.length > 0 && (
+                    {(pinnedProjectSessions.length > 0 ||
+                      normalProjectSessions.length > 0) && (
                       <div className="project-session-list">
-                        {visibleProjectSessions.map((session) => (
-                          <button
-                            key={session.filePath}
-                            className={
-                              isSameSessionPath(
-                                activeAgent?.sessionPath,
-                                session.filePath,
-                              ) && !activeSessionShownAsAgent
-                                ? "conversation agent-row session-row active"
-                                : "conversation agent-row session-row"
-                            }
-                            title={session.filePath}
-                            onContextMenu={(event) => {
-                              event.preventDefault();
-                              setSessionMenu({
-                                x: event.clientX,
-                                y: event.clientY,
-                                projectId: project.id,
-                                session,
-                              });
-                            }}
-                            onClick={() =>
-                              void openSidebarSession(project.id, session)
-                            }
-                          >
-                            <span
-                              className="session-node-marker"
+                        {pinnedProjectSessions.map(renderProjectSessionButton)}
+                        {pinnedProjectSessions.length > 0 &&
+                          normalProjectSessions.length > 0 && (
+                            <div
+                              className="project-session-divider"
                               aria-hidden="true"
                             />
-                            <div className="conversation-body">
-                              <div className="conversation-title">
-                                <strong>
-                                  {session.name || t("common.untitled")}
-                                </strong>
-                                <time
-                                  className="session-relative-time"
-                                  dateTime={new Date(session.updatedAt).toISOString()}
-                                  title={new Date(session.updatedAt).toLocaleString()}
-                                >
-                                  {formatSidebarRelativeTime(
-                                    session.updatedAt,
-                                    relativeTimeNow,
-                                  )}
-                                </time>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
+                          )}
+                        {normalProjectSessions.map(renderProjectSessionButton)}
                       </div>
                     )}
                     {projectSessionsLoading && (
@@ -4026,77 +4159,6 @@ ${goalTextRef.current}
                   />
                 )}
               </div>
-              <div className="header-action-group session-group">
-                <div className="session-combo" ref={sessionComboRef}>
-                  <button
-                    className="session-combo-trigger"
-                    disabled={!activeProjectId || isAgentStarting}
-                    title={t("app.newSession")}
-                    onClick={() => {
-                      if (activeAgentId) {
-                        setSessionActionsOpen((open) => !open);
-                      } else {
-                        createAgent();
-                      }
-                    }}
-                  >
-                    <span className="session-combo-label">{t("app.new")}</span>
-                    {activeAgentId && (
-                      <span className={`session-combo-chevron${sessionActionsOpen ? " open" : ""}`}>
-                        <ChevronDown size={12} />
-                      </span>
-                    )}
-                  </button>
-                  {sessionActionsOpen && activeAgentId && (
-                    <div className="session-combo-menu">
-                      <button
-                        onClick={() => {
-                          createAgent();
-                          setSessionActionsOpen(false);
-                        }}
-                      >
-                        <Plus size={14} />
-                        <span>{t("app.newSession")}</span>
-                      </button>
-                      <div className="session-combo-divider" />
-                      <button
-                        disabled={activeAgent?.status !== "running"}
-                        onClick={() => {
-                          abortAgent();
-                          setSessionActionsOpen(false);
-                        }}
-                      >
-                        {t("app.stop")}
-                      </button>
-                      {!isLanWeb && (
-                        <button
-                          disabled={
-                            activeAgent?.status === "starting" ||
-                            !!loadingAction
-                          }
-                          onClick={async () => {
-                            if (!activeAgentId) return;
-                            setLoadingAction("restart");
-                            setSessionActionsOpen(false);
-                            try {
-                              const tab =
-                                await api.agents.restart(activeAgentId);
-                              setActiveAgentId(tab.id);
-                              void refreshRuntimeState(tab.id);
-                            } finally {
-                              setLoadingAction(null);
-                            }
-                          }}
-                        >
-                          {loadingAction === "restart"
-                            ? t("app.restarting")
-                            : t("app.restart")}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
               <div className="header-action-group panel-group">
                 {!isLanWeb && (
                   <>
@@ -4185,6 +4247,7 @@ ${goalTextRef.current}
                     onOpenExternal={(url) => api.app.openExternal(url)}
                     onOpenFile={openFilePath}
                     onDiffFile={diffFilePath}
+                    onUndoUserMessage={undoUserMessage}
                     onResendUserMessage={resendUserMessage}
                     showThinking={settings.showThinking}
                     fileSummariesByMessage={turnFileSummaryByMessage}
@@ -4204,6 +4267,7 @@ ${goalTextRef.current}
                       onPreviewImage={setPreviewImage}
                       onOpenExternal={(url) => api.app.openExternal(url)}
                       onOpenFile={openFilePath}
+                      onUndoUserMessage={undoUserMessage}
                       onResendUserMessage={resendUserMessage}
                       showThinking={settings.showThinking}
                     />
@@ -4251,6 +4315,25 @@ ${goalTextRef.current}
 
         {activeAgent && (
         <footer ref={composerRef} className="composer">
+          {approvalRequest && (() => {
+            const approvalUi = describeApprovalRequest(approvalRequest);
+            return (
+              <ApprovalDialog
+                request={approvalRequest}
+                title={approvalUi.title}
+                message={approvalUi.message}
+                options={approvalUi.options}
+                mode={approvalUi.mode}
+                filterPlaceholder={approvalUi.filterPlaceholder}
+                emptyLabel={approvalUi.emptyLabel}
+                helperText={approvalUi.helperText}
+                cancelResponse={approvalUi.cancelResponse}
+                busy={approvalBusy}
+                inline
+                onSelect={(response) => void respondApproval(response as Record<string, unknown>)}
+              />
+            );
+          })()}
           {/* 图片预览作为输入框上方的附件栏,避免占用 textarea 的可输入区域。 */}
           {attachedImages.length > 0 && (
             <div className="image-preview-area">
@@ -4300,7 +4383,6 @@ ${goalTextRef.current}
               state={activeRuntimeState}
               compacting={compacting}
               disabled={isAgentBusy || composerDisabled}
-              onCycleModel={cycleModel}
               onPickModel={openModelPicker}
               onPickThinking={() => setThinkingPickerOpen(true)}
               onCompact={compactAgent}
@@ -4341,7 +4423,9 @@ ${goalTextRef.current}
               placeholder={
                 isAgentStarting
                   ? t("app.agentStartingPlaceholder")
-                  : !activeAgent
+                  : isUiSlashApprovalActive
+                    ? t("app.composerUiSlashPlaceholder")
+                    : !activeAgent
                     ? t("app.composerNoAgentPlaceholder")
                     : prompt.startsWith("!!")
                       ? t("app.composerSilentPlaceholder")
@@ -4393,7 +4477,7 @@ ${goalTextRef.current}
               <span className={composerMode ? "composer-mode-status" : ""}>
                 {composerStatusText}
               </span>
-              {activeAgent?.status === "running" && (
+              {activeAgent?.status === "running" && !isUiSlashApprovalActive && (
                 <button className="stop-send" onClick={() => abortAgent()}>
                   {t("app.stop")}
                 </button>
@@ -4401,7 +4485,7 @@ ${goalTextRef.current}
               <div className="send-button-group">
                 <button
                   disabled={
-                    isAgentStarting ||
+                    composerDisabled ||
                     !activeAgentId ||
                     (!prompt.trim() && attachedImages.length === 0)
                   }
@@ -4590,6 +4674,13 @@ ${goalTextRef.current}
             void api.files.showInFolder(projectMenu.project.path);
             setProjectMenu(null);
           }}
+          onTogglePin={() => {
+            const project = projectMenu.project;
+            setProjectMenu(null);
+            void api.projects.togglePinned(project.id).then((next) => {
+              setProjects(next);
+            });
+          }}
           onImportCodexSessions={() => openCodexImport(projectMenu.project)}
           onImportClaudeSessions={() => openClaudeImport(projectMenu.project)}
           onRemoveProject={async () => {
@@ -4609,6 +4700,9 @@ ${goalTextRef.current}
             if (!agentActionLoading) setAgentMenu(null);
           }}
           onRename={() => openAgentRename(agentMenu.agent)}
+          onRestart={() => {
+            void restartAgent(agentMenu.agent.id);
+          }}
           onExport={() => {
             void exportAgentHtml(agentMenu.agent.id);
           }}
@@ -4632,6 +4726,9 @@ ${goalTextRef.current}
           onClose={() => {
             if (!sessionActionLoading) setSessionMenu(null);
           }}
+          onRestartSession={() => {
+            void openSidebarSession(sessionMenu.projectId, sessionMenu.session);
+          }}
           onRename={() =>
             openSessionRename(sessionMenu.projectId, sessionMenu.session)
           }
@@ -4652,10 +4749,22 @@ ${goalTextRef.current}
               if (tab) setRpcLogAgentId(tab.id);
             });
           }}
-          onDeleteSession={() => {
+          onTogglePin={() => {
             const session = sessionMenu.session;
             setSessionMenu(null);
-            void deleteHistorySession(session);
+            // 置顶仅影响侧栏排序,不会改变会话内容。这里需要同步刷新主列表和历史列表，避免只改标记不改显示顺序。
+            void api.sessions.togglePinned(sessionMenu.projectId, session.filePath).then(() => {
+              void refreshProjectSessions(sessionMenu.projectId);
+              if (sessionsProjectId === sessionMenu.projectId) {
+                void refreshSessions(sessionMenu.projectId);
+              }
+            });
+          }}
+          onDeleteSession={() => {
+            const session = sessionMenu.session;
+            const projectId = sessionMenu.projectId;
+            setSessionMenu(null);
+            void deleteHistorySession(session, projectId);
           }}
         />
       )}
@@ -4828,6 +4937,7 @@ ${goalTextRef.current}
           info={updateInfo}
           checking={updateChecking}
           onClose={() => setUpdateInfo(null)}
+          onSkipVersion={() => skipCurrentAppUpdate(updateInfo)}
           onOpenRelease={() => api.app.openExternal(updateInfo.releaseUrl)}
           onDownload={() =>
             api.app.openExternal(
@@ -4947,25 +5057,6 @@ ${goalTextRef.current}
           onCancel={() => setConfirmDialog(null)}
         />
       )}
-
-      {approvalRequest && (() => {
-        const approvalUi = describeApprovalRequest(approvalRequest);
-        return (
-          <ApprovalDialog
-            request={approvalRequest}
-            title={approvalUi.title}
-            message={approvalUi.message}
-            options={approvalUi.options}
-            mode={approvalUi.mode}
-            filterPlaceholder={approvalUi.filterPlaceholder}
-            emptyLabel={approvalUi.emptyLabel}
-            helperText={approvalUi.helperText}
-            cancelResponse={approvalUi.cancelResponse}
-            busy={approvalBusy}
-            onSelect={(response) => void respondApproval(response as Record<string, unknown>)}
-          />
-        );
-      })()}
 
       {renamingFile && (
         <div className="config-modal-overlay" onClick={() => setRenamingFile(null)}>
@@ -5222,6 +5313,7 @@ function UpdateModal(props: {
   info: AppUpdateInfo;
   checking: boolean;
   onClose: () => void;
+  onSkipVersion: () => void | Promise<void>;
   onDownload: () => void;
   onOpenRelease: () => void;
 }) {
@@ -5256,6 +5348,9 @@ function UpdateModal(props: {
           </div>
         </div>
         <div className="update-actions">
+          <button onClick={props.onSkipVersion}>
+            {t("update.skipCurrentVersion")}
+          </button>
           <button onClick={props.onOpenRelease}>
             {t("update.openRelease")}
           </button>

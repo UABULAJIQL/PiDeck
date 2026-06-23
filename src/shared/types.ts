@@ -4,7 +4,7 @@ export type Project = {
 	path: string;
 	lastOpenedAt: number;
 	pinned?: boolean;
-	sortOrder?: number;
+	sortOrder: number;
 	kind?: "chat";
 };
 
@@ -75,7 +75,16 @@ export type SessionSummary = {
 	preview: string;
 	updatedAt: number;
 	messageCount: number;
+	pinned?: boolean;
 };
+
+export function compareSessionsForDisplay(left: SessionSummary, right: SessionSummary) {
+	return (
+		Number(Boolean(right.pinned)) - Number(Boolean(left.pinned)) ||
+		right.updatedAt - left.updatedAt ||
+		left.filePath.localeCompare(right.filePath)
+	);
+}
 
 export type CodexImportStatus = "new" | "current" | "outdated";
 
@@ -243,6 +252,8 @@ export type AppSettings = {
 	telemetryLastHeartbeatDate?: string;
 	/** 应用安装类型：portable（便携版）或 installed（安装版），启动时自动检测并持久化 */
 	installationType?: "portable" | "installed";
+	/** 用户选择跳过的桌面端版本号；仅忽略这一版的更新提示，新版本仍会继续提醒 */
+	appUpdateSkippedVersion?: string;
 	/** RPC 调用超时时间（毫秒），默认 600000（10 分钟），用于长时间运行的命令 */
 	rpcTimeout: number;
 	/** 外部链接打开方式：external 使用系统默认浏览器，internal 使用应用内独立窗口 */
@@ -290,6 +301,7 @@ export type PiSkillSummary = {
 	id: string;
 	name: string;
 	description: string;
+	remark?: string;
 	path: string;
 	dir: string;
 	sourceId: PiSkillLocation["id"];
@@ -314,6 +326,7 @@ export type CreatePiSkillInput = {
 export type PiExtensionSummary = {
 	id: string;
 	source: string;
+	remark?: string;
 	path?: string;
 	scope: "user" | "project" | "unknown";
 	enabled: boolean;
@@ -428,6 +441,8 @@ export type SendPromptInput = {
 	message: string;
 	images?: ImageContent[]; // 可选的图片列表
 	streamingBehavior?: "steer" | "followUp";
+	/** 标记由桌面端触发的扩展 UI slash 命令；这类命令只打开本地选择器，不应显示成聊天消息。 */
+	uiSlashCommand?: boolean;
 };
 
 /** 实时思考内容更新，用于流式展示模型推理过程 */
@@ -447,72 +462,7 @@ export type AgentServerRequest = {
 	message?: string;
 	options?: string[];
 	timeout?: number;
-};
-
-// ===== 飞书桥接类型 =====
-
-export type FeishuBotConfig = {
-	id: string;
-	name: string;
-	enabled: boolean;
-	appId: string;
-	appSecret: string; // 加密存储
-	defaultWorkspaceId?: string;
-	defaultChannelId?: string;
-	defaultModelId?: string;
-	requireMention?: boolean;
-	/** 用户自己的 open_id（用于自动拉群时加入 user_id_list）。在飞书中给 Bot 发 /whoami 即可获取 */
-	defaultUserOpenId?: string;
-};
-
-export type FeishuBridgeStatus = {
-	status: "disconnected" | "connecting" | "connected" | "error";
-	activeBindings: number;
-	connectedAt?: number;
-	errorMessage?: string;
-	botOpenId?: string;
-	botName?: string;
-};
-
-export type FeishuChatBinding = {
-	chatId: string;
-	botId: string;
-	userId: string;
-	sessionId: string;
-	sessionPath?: string;
-	workspaceId: string;
-	channelId?: string;
-	modelId?: string;
-	source: "feishu" | "session-mirror";
-	chatType: "p2p" | "group";
-	groupName?: string;
-	createdAt: number;
-};
-
-export type FeishuChatMessage = {
-	chatId: string;
-	messageId: string;
-	senderOpenId: string;
-	senderName?: string;
-	chatType: "p2p" | "group";
-	groupName?: string;
-	messageType: "text" | "image" | "post" | "file";
-	text: string;
-	imageKeys: string[];
-	fileKeys: string[];
-	timestamp: number;
-};
-
-export type FeishuConnectInput = {
-	appId: string;
-	appSecret: string;
-	name?: string;
-	defaultUserOpenId?: string;
-};
-
-export type FeishuTestResult = {
-	success: boolean;
-	message: string;
-	botName?: string;
+	/** 请求来源于桌面端扩展 UI slash 命令时用于抑制聊天气泡/响应占位。 */
+	origin?: "uiSlashCommand";
 };
 

@@ -6,6 +6,7 @@ import type {
 	PiSkillSummary,
 } from "../../../shared/types";
 import { t } from "../i18n";
+import { useConfigRemarkEditor } from "./ConfigRemarkEditor";
 
 export function SkillsTab(props: {
 	data: PiSkillListResult;
@@ -23,6 +24,7 @@ export function SkillsTab(props: {
 	onToggle: (skill: PiSkillSummary, enabled: boolean) => void;
 	onDelete: (skill: PiSkillSummary) => void;
 	onOpenFolder: (skill: PiSkillSummary) => void;
+	onEditRemark: (skill: PiSkillSummary, remark: string) => void;
 }) {
 	const { data } = props;
 	const [locationPickerOpen, setLocationPickerOpen] = useState(false);
@@ -67,7 +69,6 @@ export function SkillsTab(props: {
 						<div
 							className="skill-location-picker"
 							onBlur={() => {
-								// 先让菜单项的 mouseDown 完成选中，再关闭弹层；否则点击选项时可能只触发焦点切换，表现为不回填。
 								window.setTimeout(() => setLocationPickerOpen(false), 80);
 							}}
 						>
@@ -91,7 +92,6 @@ export function SkillsTab(props: {
 											className={location.id === props.newLocationId ? "active" : ""}
 											onMouseDown={(event) => {
 												event.preventDefault();
-												// 自定义下拉只改变保存位置，不立即创建，避免用户误触后写入文件。
 												props.onChangeNewLocation(location.id);
 												setLocationPickerOpen(false);
 											}}
@@ -133,6 +133,7 @@ export function SkillsTab(props: {
 							onToggle={props.onToggle}
 							onDelete={props.onDelete}
 							onOpenFolder={props.onOpenFolder}
+							onEditRemark={props.onEditRemark}
 						/>
 					))
 				)}
@@ -146,8 +147,13 @@ function SkillCard(props: {
 	onToggle: (skill: PiSkillSummary, enabled: boolean) => void;
 	onDelete: (skill: PiSkillSummary) => void;
 	onOpenFolder: (skill: PiSkillSummary) => void;
+	onEditRemark: (skill: PiSkillSummary, remark: string) => void | Promise<void>;
 }) {
 	const { skill } = props;
+	const remarkEditor = useConfigRemarkEditor({
+		remark: skill.remark,
+		onSave: (remark) => props.onEditRemark(skill, remark),
+	});
 	return (
 		<article className="session-card skill-card">
 			<div className="session-card-display">
@@ -162,6 +168,7 @@ function SkillCard(props: {
 						</div>
 					</div>
 					<small>{skill.description || t("config.skillDescriptionMissing")}</small>
+					{remarkEditor.content}
 					<small>{skill.sourceLabel} · {skill.path}</small>
 					{skill.warnings.length > 0 && (
 						<ul className="skill-warnings">
@@ -172,6 +179,7 @@ function SkillCard(props: {
 					)}
 				</div>
 				<div className="session-card-actions skill-card-actions">
+					{remarkEditor.actions}
 					<button className="session-rename-button" onClick={() => props.onToggle(skill, !skill.enabled)}>
 						{skill.enabled ? t("common.disabled") : t("common.enabled")}
 					</button>
