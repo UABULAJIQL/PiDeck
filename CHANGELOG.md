@@ -8,27 +8,41 @@ All notable changes to PiDeck are documented here.
 
 ## v0.6.2 - 2026-06-24
 
-### Added
+### 🚀 New Features
 
-- Feishu remote-control integration, including streaming cards, maintenance docs, and guided setup flows.
-- Monaco-based file viewer and diff editor support for in-app file inspection and editing.
-- Quick prompts, approval flow improvements, and richer slash-command / workspace interactions.
+- **Feishu remote control**: Added a Feishu bridge so agents can be controlled remotely, along with setup guidance and maintenance documentation.
+- **Feishu streaming cards v4**: Remote activity is now easier to follow with live progress cards, faster confirmation feedback, and better parallel-start behavior.
+- **Upgraded built-in file editor**: Added a Monaco-based file viewer, diff editor, in-app editing flow, and Git workspace change entry points.
+- **Expanded quick-input workflow**: Added and refined quick prompts, app-level persistence, floating input helpers, and a fuller slash-command panel.
+- **Approval and command UX improvements**: Approval flow, prompt-prefix handling, and command-trigger interactions are smoother for frequent desktop workflows.
+- **Pi plugin management improvements**: Added Pi plugin enable/disable support with better recommendation and onboarding surfaces.
+- **Stronger settings and extension entry points**: The settings area now includes repository/about entry points and provider proxy support.
 
-### Changed
+### ✨ Improvements
 
-- Settings and workspace navigation now better match the current desktop workflow, including repository/about entry points and provider proxy support.
-- App structure, session handling, and message rendering were refactored to support larger conversations and more stable multi-panel interactions.
-- README and contributor-facing documentation were refreshed to match the current maintained distribution path.
+- **Workspace interaction refresh**: Agent and history items now behave more consistently inside each project, with better sidebar scrolling, grouping, and session merge behavior.
+- **Long-session stability**: Rendering, message syncing, thinking-state animation, and workspace switching are more stable in large conversations.
+- **Model and config ergonomics**: Vendor `baseUrl` and models endpoints now auto-complete more reliably, and model-fetch error feedback is clearer.
+- **File-editing workflow polish**: Diff persistence, changed-file awareness, Git workspace state, and external editor management are more complete.
+- **App state and window behavior**: Single-instance startup, window state handling, update recommendation flow, and restart interactions better fit desktop usage.
+- **Docs and entry-point refresh**: README, contributor links, and Feishu maintenance docs were updated to match the current maintained distribution path.
 
-### Fixed
+### 🐛 Fixes
 
-- Model endpoint auto-completion and provider model-fetch error states are more reliable across vendors.
-- Missing files now open with an empty-state response instead of surfacing a hard read error in the editor.
-- Anthropic Messages model discovery retries and pasted-image input behavior were corrected.
+- **Feishu result rendering**: Fixed Feishu streaming-card results not rendering correctly.
+- **Deleted-file handling**: Opening a deleted file now shows a friendly empty state instead of a hard read error.
+- **Anthropic model discovery**: Corrected the Anthropic Messages retry path and `/v1/models` probing behavior.
+- **Model-fetch feedback**: Error messaging now reflects the dual-path retry strategy more accurately.
+- **Pasted-image input**: Fixed pasted-image preview and input behavior regressions.
+- **Session visibility and activation**: Fixed duplicate history / agent activation, blank messages after opening history sessions, and unexpected session reordering.
+- **Duplicate-creation guard**: Added session-level creation deduplication to prevent rapid repeated clicks from creating multiple agents.
+- **Cleanup of residual issues**: Removed leftover merge-conflict code and fixed several smaller Feishu and workspace interaction bugs.
 
 ### Removed
 
-- Removed issue feedback, in-app update checks, pi update notices, and links to the former upstream project/contact surfaces.
+- **Legacy entry points**: Removed issue feedback, in-app update checks, pi update notices, and links to former upstream contact surfaces.
+- **QR-based config flow**: Removed the QR setup path and kept the simpler manual App ID + App Secret flow.
+- **First-message prefix**: Removed the first-message prefix feature to simplify default prompting behavior.
 
 ## v0.6.1 - 2026-06-16
 
