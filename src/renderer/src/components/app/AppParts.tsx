@@ -47,6 +47,7 @@ import type {
 	ClaudeSessionSummary,
 	FileTreeNode,
 	GitBranchInfo,
+	ComposerImage,
 	ImageContent,
 	PiCommand,
 	PiInstallStatus,
@@ -1588,7 +1589,7 @@ function ToolSummary(props: { message: ChatMessage }) {
 
 export const AgentRun = memo(function AgentRun(props: {
 	run: AgentRunItem;
-	onPreviewImage: (image: ImageContent) => void;
+	onPreviewImage: (image: ComposerImage) => void;
 	showThinking?: boolean;
 	onOpenExternal: (url: string) => void;
 	onOpenFile?: (path: string) => void;
@@ -1668,7 +1669,7 @@ export const AgentRun = memo(function AgentRun(props: {
 });
 
 export function ImagePreviewModal(props: {
-	image: ImageContent;
+	image: ComposerImage;
 	onClose: () => void;
 }) {
 	return (
@@ -1681,7 +1682,7 @@ export function ImagePreviewModal(props: {
 				<X size={20} strokeWidth={2.4} />
 			</button>
 			<img
-				src={`data:${props.image.mimeType};base64,${props.image.data}`}
+				src={props.image.type === "image-asset" ? (props.image.previewUrl ?? "") : `data:${props.image.mimeType};base64,${props.image.data}`}
 				alt={t("app.imagePreviewAlt")}
 				onClick={(event) => event.stopPropagation()}
 			/>
@@ -1704,7 +1705,7 @@ function stripThinkingTags(text: string): string {
 
 export const ChatBubble = memo(function ChatBubble(props: {
 	message: ChatMessage;
-	onPreviewImage: (image: ImageContent) => void;
+	onPreviewImage: (image: ComposerImage) => void;
 	showThinking?: boolean;
 	onOpenExternal: (url: string) => void;
 	onOpenFile?: (path: string) => void;
@@ -1801,7 +1802,7 @@ export const ChatBubble = memo(function ChatBubble(props: {
 							{message.images.map((img, index) => (
 								<img
 									key={index}
-									src={`data:${img.mimeType};base64,${img.data}`}
+									src={img.type === "image-asset" ? (img.previewUrl ?? "") : `data:${img.mimeType};base64,${img.data}`}
 									alt={t("app.imageAlt", { index: index + 1 })}
 									className="message-image"
 									onClick={() => props.onPreviewImage(img)}

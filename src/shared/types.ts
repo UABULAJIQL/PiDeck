@@ -54,9 +54,19 @@ export type ChatMessage = {
 	text: string;
 	timestamp: number;
 	meta?: Record<string, unknown>;
-	images?: ImageContent[]; // 用户消息中附加的图片
+	images?: ComposerImage[]; // 用户消息中附加的图片
 	/** 思考内容：来自 thinking 内容块，用于展示模型推理过程 */
 	thinking?: string;
+};
+
+/**
+ * 高频消息流只推送单条 upsert patch，避免每个 delta 都复制整份消息数组到 renderer。
+ * renderer 仍保留全量 agents:message 作为初始同步/整会话替换的兜底通道。
+ */
+export type AgentMessagePatch = {
+	agentId: string;
+	message: ChatMessage;
+	op?: "upsert" | "remove";
 };
 
 export type FileTreeNode = {
@@ -434,10 +444,25 @@ export type ImageContent = {
 	mimeType: string; // 如 "image/png", "image/jpeg", "image/gif", "image/webp"
 };
 
+/**
+ * renderer 侧持久引用的图片资产。
+ * 使用本地磁盘资产引用替代 React state 中的大块 base64，发送给 pi 时再由主进程回填原始数据。
+ */
+export type ImageAssetRef = {
+	type: "image-asset";
+	assetId: string;
+	assetPath: string;
+	mimeType: string;
+	size?: number;
+	previewUrl?: string;
+};
+
+export type ComposerImage = ImageContent | ImageAssetRef;
+
 export type SendPromptInput = {
 	agentId: string;
 	message: string;
-	images?: ImageContent[]; // 可选的图片列表
+	images?: ComposerImage[]; // 可选的图片列表
 	streamingBehavior?: "steer" | "followUp";
 	/** 标记由桌面端触发的扩展 UI slash 命令；这类命令只打开本地选择器，不应显示成聊天消息。 */
 	uiSlashCommand?: boolean;

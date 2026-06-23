@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { ipcChannels } from "../shared/ipc";
 import type {
+	AgentMessagePatch,
 	AgentRuntimeState,
 	AgentTab,
 	AppInfo,
+	ImageAssetRef,
+	ImageContent,
 	AppSettings,
 	AppUpdateInfo,
 	AvailableModel,
@@ -243,6 +246,12 @@ const api = {
 		onApplyWindow: (callback: (settings: AppSettings) => void) =>
 			subscribe(ipcChannels.settingsApplyWindow, callback),
 	},
+	images: {
+		createAsset: (image: ImageContent) =>
+			ipcRenderer.invoke(ipcChannels.imagesCreateAsset, image) as Promise<ImageAssetRef>,
+		deleteAsset: (image: ImageAssetRef) =>
+			ipcRenderer.invoke(ipcChannels.imagesDeleteAsset, image) as Promise<void>,
+	},
 	quickPrompts: {
 		get: () =>
 			ipcRenderer.invoke(ipcChannels.quickPromptsGet) as Promise<{
@@ -432,6 +441,8 @@ const api = {
 		onMessages: (
 			callback: (payload: { agentId: string; messages: ChatMessage[] }) => void,
 		) => subscribe(ipcChannels.agentsMessage, callback),
+		onMessagePatch: (callback: (payload: AgentMessagePatch) => void) =>
+			subscribe(ipcChannels.agentsMessagePatch, callback),
 		onEvent: (
 			callback: (payload: { agentId: string; event: unknown }) => void,
 		) => subscribe(ipcChannels.agentsEvent, callback),

@@ -68,6 +68,13 @@ const TERMINAL_THEMES = {
 } as const;
 
 type TerminalThemeId = keyof typeof TERMINAL_THEMES;
+const MAX_TERMINAL_RENDERER_BUFFER = 200_000;
+
+function appendTerminalBuffer(current: string | undefined, data: string): string {
+	const next = `${current ?? ""}${data}`;
+	if (next.length <= MAX_TERMINAL_RENDERER_BUFFER) return next;
+	return next.slice(-MAX_TERMINAL_RENDERER_BUFFER);
+}
 
 function stripReplayBuffer(tab: TerminalTab): TerminalTab {
 	const { buffer: _buffer, ...rest } = tab;
@@ -133,7 +140,7 @@ export function TerminalDock(props: {
 				buffersRef.current = nextTabs.reduce<Record<string, string>>(
 					(current, tab) => ({
 						...current,
-						[tab.id]: tab.buffer ?? current[tab.id] ?? "",
+						[tab.id]: appendTerminalBuffer(current[tab.id], tab.buffer ?? ""),
 					}),
 					{ ...buffersRef.current },
 				);
@@ -151,8 +158,10 @@ export function TerminalDock(props: {
 
 	useEffect(() => {
 		const offData = props.terminal.onData((payload) => {
-			buffersRef.current[payload.tabId] =
-				(buffersRef.current[payload.tabId] ?? "") + payload.data;
+			buffersRef.current[payload.tabId] = appendTerminalBuffer(
+				buffersRef.current[payload.tabId],
+				payload.data,
+			);
 			if (payload.tabId === activeTabIdRef.current) {
 				xtermRef.current?.write(payload.data);
 			}
@@ -166,8 +175,10 @@ export function TerminalDock(props: {
 				),
 			);
 			const exitText = `\r\n[process exited${payload.exitCode != null ? ` with code ${payload.exitCode}` : ""}]\r\n`;
-			buffersRef.current[payload.tabId] =
-				(buffersRef.current[payload.tabId] ?? "") + exitText;
+			buffersRef.current[payload.tabId] = appendTerminalBuffer(
+				buffersRef.current[payload.tabId],
+				exitText,
+			);
 			if (payload.tabId === activeTabIdRef.current) xtermRef.current?.write(exitText);
 		});
 		return () => {

@@ -2,6 +2,7 @@ import { app, type BrowserWindow, Notification } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import type {
+	AgentMessagePatch,
 	AgentRuntimeState,
 	AgentServerRequest,
 	AgentTab,
@@ -9,6 +10,7 @@ import type {
 	ChatMessage,
 	CreateAgentInput,
 	ForkMessage,
+	ImageAssetRef,
 	ImageContent,
 	Project,
 	SendPromptInput,
@@ -21,6 +23,7 @@ import { formatBashToolMessage } from "./bashResult";
 import { BashInputRequestTracker } from "./BashInputRequestTracker";
 import { isInteractiveServerRequest, toAgentServerRequest } from "./serverRequestRouting";
 import type { SettingsStore } from "../settings/SettingsStore";
+import type { ImageAssetStore } from "../images/ImageAssetStore";
 
 export class AgentManager {
 	private readonly agents = new Map<string, AgentRuntime>();
@@ -63,6 +66,7 @@ export class AgentManager {
 		private readonly getProject: (id: string) => Project | undefined,
 		private readonly getWindow: () => BrowserWindow | null,
 		private readonly settingsStore: SettingsStore,
+		private readonly imageAssetStore: ImageAssetStore,
 	) {}
 
 	list() {
@@ -81,7 +85,7 @@ export class AgentManager {
 		if (index < 0) return null;
 		const [removed] = list.splice(index, 1);
 		this.messages.set(agentId, list);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.emitMessagePatch(agentId, { agentId, message: removed, op: "remove" });
 		this.refreshAutoTitle(agentId);
 		return removed;
 	}
@@ -95,7 +99,7 @@ export class AgentManager {
 		const response = await runtime.process.client.request({
 			type: "get_messages",
 		});
-		const messages = this.convertAgentMessages(
+		const messages = await this.convertAgentMessages(
 			agentId,
 			(response.data as { messages?: unknown[] } | undefined)?.messages ?? [],
 		);
@@ -381,12 +385,13 @@ export class AgentManager {
 
 		// 保存用户消息（包含图片）。运行中消息先显示在对话里，并标记它会在何时被 pi 消费：
 		// steer=下一次 LLM 调用前，followUp=当前 agent 完全停止后。
+		const promptImages = await this.resolvePromptImages(input.images);
 		this.addMessage(
 			input.agentId,
 			"user",
 			trimmed || "[图片]",
 			promptDeliveryBehavior ? { streamingBehavior: promptDeliveryBehavior } : undefined,
-			input.images,
+			promptImages,
 		);
 
 		// 在设置状态为 running 之前检查进程是否还活着，避免进程崩溃后状态不一致
@@ -413,7 +418,7 @@ export class AgentManager {
 			const requestPayload: Record<string, unknown> = {
 				type: "prompt",
 				message: trimmed || "Describe this image.",
-				...(hasImages ? { images: input.images } : {}),
+				...(hasImages ? { images: promptImages } : {}),
 			};
 			// 如果 agent 已经忙碌且调用方没指定 streamingBehavior，默认用 steer；
 			// 与上方用户消息 meta 保持同一个计算结果，避免 UI 标记和实际 RPC 语义不一致。
@@ -1161,10 +1166,11 @@ export class AgentManager {
 			.find(({ message }) => message.role === "user")?.index;
 		if (lastUserIndex == null) return false;
 		if (list[lastUserIndex]?.text.trim() !== command) return false;
-		const nextMessages = list.filter((_, index) => index !== lastUserIndex);
-		this.messages.set(agentId, nextMessages);
+		const [removed] = list.splice(lastUserIndex, 1);
+		if (!removed) return false;
+		this.messages.set(agentId, list);
 		this.refreshAutoTitle(agentId);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: nextMessages });
+		this.emitMessagePatch(agentId, { agentId, message: removed, op: "remove" });
 		return true;
 	}
 
@@ -1293,7 +1299,7 @@ export class AgentManager {
 		}
 
 		this.messages.set(agentId, list);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.emitMessagePatch(agentId, { agentId, message: existing ?? list[list.length - 1]! });
 	}
 
 	private upsertToolMessage(
@@ -1342,11 +1348,10 @@ export class AgentManager {
 				readFile(filePath, "utf8")
 					.then((content) => {
 						originalContent = content;
-						existing?.meta && (existing.meta.originalContent = content);
-						this.emit(ipcChannels.agentsMessage, {
-							agentId,
-							messages: this.messages.get(agentId) ?? [],
-						});
+						if (existing?.meta) {
+							existing.meta.originalContent = content;
+							this.emitMessagePatch(agentId, { agentId, message: existing });
+						}
 					})
 					.catch(() => {
 						// 文件不存在或被删除，跳过
@@ -1394,7 +1399,7 @@ export class AgentManager {
 		}
 
 		this.messages.set(agentId, list);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.emitMessagePatch(agentId, { agentId, message: existing ?? list[list.length - 1]! });
 	}
 
 	private addMessage(
@@ -1405,7 +1410,7 @@ export class AgentManager {
 		images?: ImageContent[],
 	) {
 		const list = this.messages.get(agentId) ?? [];
-		list.push({
+		const message = {
 			id: randomUUID(),
 			agentId,
 			role,
@@ -1413,10 +1418,11 @@ export class AgentManager {
 			timestamp: Date.now(),
 			meta,
 			...(images && images.length > 0 ? { images } : {}),
-		});
+		};
+		list.push(message);
 		this.messages.set(agentId, list);
 		if (role === "user" || role === "assistant") this.refreshAutoTitle(agentId);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.emitMessagePatch(agentId, { agentId, message });
 	}
 
 	private refreshAutoTitle(agentId: string) {
@@ -1509,20 +1515,20 @@ export class AgentManager {
 		message.meta = { status, attempt, maxAttempts, delayMs, errorMessage: reason };
 
 		this.messages.set(agentId, list);
-		this.emit(ipcChannels.agentsMessage, { agentId, messages: list });
+		this.emitMessagePatch(agentId, { agentId, message });
 	}
 
-	private convertAgentMessages(
+	private async convertAgentMessages(
 		agentId: string,
 		rawMessages: unknown[],
-	): ChatMessage[] {
+	): Promise<ChatMessage[]> {
 		const historicalToolCalls = this.collectHistoricalToolCalls(rawMessages);
-		return rawMessages
-			.flatMap<ChatMessage>((message, index) => {
+		const groups = await Promise.all(
+			rawMessages.map(async (message, index): Promise<ChatMessage[]> => {
 				if (!message || typeof message !== "object") return [];
 				const typed = message as any;
 				if (typed.role === "user") {
-					const images = this.extractImages(typed.content);
+					const images = await this.extractImages(typed.content);
 					return [
 						{
 							id: `${agentId}-history-${index}`,
@@ -1584,8 +1590,9 @@ export class AgentManager {
 					];
 				}
 				return [];
-			})
-			.filter((message: ChatMessage) => message.text.trim());
+			}),
+		);
+		return groups.flat().filter((message: ChatMessage) => message.text.trim());
 	}
 
 	private collectHistoricalToolCalls(rawMessages: unknown[]) {
@@ -1672,21 +1679,44 @@ export class AgentManager {
 	}
 
 	/** 从 pi 历史消息 content 中恢复图片附件，用于历史会话重新打开后的图片展示。 */
-	private extractImages(content: unknown): ImageContent[] {
+	private async extractImages(content: unknown): Promise<ImageAssetRef[]> {
 		if (!Array.isArray(content)) return [];
-		return content.flatMap<ImageContent>((item) => {
-			if (!item || typeof item !== "object") return [];
-			const typed = item as any;
-			if (typed.type !== "image") return [];
-			const data = typeof typed.data === "string" ? typed.data : "";
-			const mimeType =
-				typeof typed.mimeType === "string"
-					? typed.mimeType
-					: typeof typed.mime_type === "string"
-						? typed.mime_type
-						: "image/png";
-			return data ? [{ type: "image", data, mimeType }] : [];
-		});
+		const images = await Promise.all(
+			content.map(async (item) => {
+				if (!item || typeof item !== "object") return null;
+				const typed = item as any;
+				if (typed.type !== "image") return null;
+				const data = typeof typed.data === "string" ? typed.data : "";
+				const mimeType =
+					typeof typed.mimeType === "string"
+						? typed.mimeType
+						: typeof typed.mime_type === "string"
+							? typed.mime_type
+							: "image/png";
+				if (!data) return null;
+				const asset = await this.imageAssetStore.createFromBase64({ type: "image", data, mimeType });
+				return {
+					...asset,
+					previewUrl: await this.imageAssetStore.getFileUrl(asset),
+				};
+			}),
+		);
+		const filtered: ImageAssetRef[] = [];
+		for (const image of images) {
+			if (image) filtered.push(image);
+		}
+		return filtered;
+	}
+
+	private async resolvePromptImages(images?: SendPromptInput["images"]): Promise<ImageContent[] | undefined> {
+		if (!images?.length) return undefined;
+		const resolved = await Promise.all(
+			images.map(async (image) => {
+				if (image.type === "image") return image;
+				return this.imageAssetStore.readAsImageContent(image);
+			}),
+		);
+		return resolved;
 	}
 
 	/** 从历史消息 content 数组中提取 thinking 内容块的文本，清理 ANSI 转义码 */
@@ -1746,6 +1776,10 @@ export class AgentManager {
 
 	private emitState() {
 		this.emit(ipcChannels.agentsState, this.list());
+	}
+
+	private emitMessagePatch(agentId: string, patch: AgentMessagePatch) {
+		this.emit(ipcChannels.agentsMessagePatch, patch);
 	}
 
 	private emit(channel: string, payload: unknown) {

@@ -181,6 +181,17 @@ export function createBrowserApi(): PiDesktopApi {
 				throw new Error("Web service mode does not support approval requests yet.");
 			},
 		},
+		images: {
+			createAsset: async (image) => ({
+				type: "image-asset" as const,
+				assetId: `browser-${Date.now()}`,
+				assetPath: "browser-inline",
+				mimeType: image.mimeType,
+				size: image.data.length,
+				previewUrl: `data:${image.mimeType};base64,${image.data}`,
+			}),
+			deleteAsset: async () => undefined,
+		},
 		settings: {
 			...base.settings,
 			get: async () => ({

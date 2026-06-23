@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -61,12 +60,12 @@ import {
 import { shouldResetExpandedDirsForProjectChange } from "./fileTreeExpansion";
 import { syncCollapsedProjects } from "./projectCollapseState";
 import { useMessagePagination } from "./hooks/useMessagePagination";
+import { useConversationStore } from "./hooks/useConversationStore";
+import { useAgentUiState } from "./hooks/useAgentUiState";
 import { useQuickPromptPresets } from "./quickPrompts";
 import {
-  AgentRun,
   AgentContextMenu,
   BranchSelector,
-  ChatBubble,
   CodexImportModal,
   ClaudeImportModal,
   ComposerToolbar,
@@ -86,14 +85,9 @@ import {
   SessionContextMenu,
   SessionHistoryModal,
   SessionStatus,
-  SessionFileSummary,
   SettingsModal,
-  ThinkingBubble,
-  ThinkingGroup,
   ThinkingPicker,
-  ToolGroup,
   applySuggestion,
-  buildOutline,
   buildSuggestionItems,
   clearSuggestionTrigger,
   displayPath,
@@ -104,11 +98,14 @@ import {
   type SessionModifiedFile,
 } from "./components/app/AppParts";
 import { FileDiffViewer } from "./components/app/FileDiffViewer";
+import { VirtualizedMessageList, type VirtualizedListHandle } from "./components/app/VirtualizedMessageList";
 import { partitionSessionsForDisplay, sortSessionsForDisplay } from "../../shared/sessionDisplay";
 import {
+  type AgentMessagePatch,
   type AgentRuntimeState,
   type AgentServerRequest,
   type AgentTab,
+  type ComposerImage,
   AppInfo,
   AppSettings,
   AppUpdateInfo,
@@ -301,9 +298,17 @@ export function App() {
   const [activeAgentByProject, setActiveAgentByProject] = useState<
     Record<string, string>
   >({});
-  const [messagesByAgent, setMessagesByAgent] = useState<
-    Record<string, ChatMessage[]>
-  >({});
+  const {
+    stateByAgent: conversationStateByAgent,
+    replaceMessages,
+    applyMessagePatch,
+    removePendingCommandMessage,
+    setThinking,
+    setAttachedImages: setConversationAttachedImages,
+    migrateAgents: migrateConversationAgents,
+    transferAgentDraft,
+    finalizeTurnSummary,
+  } = useConversationStore();
   const [files, setFiles] = useState<FileTreeNode[]>([]);
   /** Git 工作区中对比 HEAD 有变更的文件列表（用于右侧面板展示）。 */
   const [gitChangedFiles, setGitChangedFiles] = useState<
@@ -325,21 +330,28 @@ export function App() {
     branches: [],
   });
   const [commands, setCommands] = useState<PiCommand[]>([]);
-  const [runtimeStateByAgent, setRuntimeStateByAgent] = useState<
-    Record<string, AgentRuntimeState>
-  >({});
+  const {
+    runtimeStateByAgent,
+    setRuntimeStateByAgent,
+    promptByAgent,
+    setPromptByAgent,
+    sessionDurationByAgent,
+    setSessionDurationByAgent,
+    rpcLogs,
+    setRpcLogs,
+    terminalDockStateByAgent,
+    setTerminalDockStateByAgent,
+    terminalHeightByAgent,
+    setTerminalHeightByAgent,
+    drawerPinnedByAgent,
+    setDrawerPinnedByAgent,
+  } = useAgentUiState();
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [thinkingPickerOpen, setThinkingPickerOpen] = useState(false);
   const [sendBehaviorMenuOpen, setSendBehaviorMenuOpen] = useState(false);
   const [switchingBranch, setSwitchingBranch] = useState<string | null>(null);
-  const [promptByAgent, setPromptByAgent] = useState<Record<string, string>>(
-    {},
-  );
-  const [attachedImagesByAgent, setAttachedImagesByAgent] = useState<
-    Record<string, ImageContent[]>
-  >({});
-  const [previewImage, setPreviewImage] = useState<ImageContent | null>(null);
+  const [previewImage, setPreviewImage] = useState<ComposerImage | null>(null);
   /** Goal 状态 */
   const [goalText, setGoalText] = useState<string>("");
   const goalTextRef = useRef("");
@@ -357,37 +369,12 @@ export function App() {
   const prevIsAgentBusyRef = useRef(false);
 
   /** 当前 agent 流式思考的实时文本,agent_end 时清空 */
-  const [streamingThinking, setStreamingThinking] = useState<
-    Record<string, string>
-  >({});
   /** 每个 agent 最后一次会话的开始时间(status 变为 running 时记录),用 ref 避免 effect 闭包陈旧 */
   const sessionStartByAgentRef = useRef<Record<string, number>>({});
   /** 每个 agent 最后一次会话的总时长(ms),仅在会话结束后更新 */
-  const [sessionDurationByAgent, setSessionDurationByAgent] = useState<
-    Record<string, number>
-  >({});
-  /** 每轮回答完成后固化的文件修改摘要,key 为 assistant message id,便于卡片贴在对应回答后。 */
-  const [turnFileSummaryByMessage, setTurnFileSummaryByMessage] = useState<
-    Record<string, SessionModifiedFile[]>
-  >({});
-  // 记录每轮回答开始前已有的修改文件累计状态,用增量差异避免聊天卡片重复展示历史会话文件。
-  const turnFileBaselineByAgentRef = useRef<
-    Record<string, Map<string, SessionModifiedFile>>
-  >({});
-  const finalizedTurnByAgentRef = useRef<Record<string, string | null>>({});
+  /** 每轮回答完成后固化的文件修改摘要由 conversation store 按 agent 增量维护。 */
   const agentStatusByAgentRef = useRef<Record<string, AgentTab["status"]>>({});
   const completedAlertBusyByAgentRef = useRef<Record<string, boolean>>({});
-  /** RPC 日志,用于调试 */
-  const [rpcLogs, setRpcLogs] = useState<
-    Array<{
-      id: string;
-      agentId: string;
-      direction: string;
-      summary: string;
-      data?: unknown;
-      time: number;
-    }>
-  >([]);
   const [_logs, setLogs] = useState<string[]>([]); // 写入式调试日志,仅用于 onLog/onError 捕获
   const [search, setSearch] = useState("");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -411,6 +398,29 @@ export function App() {
   const [pendingUiSlashCommandAgentId, setPendingUiSlashCommandAgentId] = useState<string | null>(null);
   const pendingUiSlashCommandRef = useRef<{ agentId: string; command: string } | null>(null);
 
+  function compactRpcLogData(value: unknown, depth = 0): unknown {
+    if (value == null) return value;
+    if (typeof value === "string") {
+      return value.length > 4000 ? `${value.slice(0, 4000)}…[truncated ${value.length - 4000} chars]` : value;
+    }
+    if (typeof value !== "object") return value;
+    if (depth >= 3) return "[truncated nested object]";
+    if (Array.isArray(value)) {
+      const next = value.slice(0, 20).map((item) => compactRpcLogData(item, depth + 1));
+      if (value.length > 20) next.push(`[truncated ${value.length - 20} items]`);
+      return next;
+    }
+    const entries = Object.entries(value as Record<string, unknown>);
+    const limitedEntries = entries.slice(0, 40).map(([key, entryValue]) => [
+      key,
+      compactRpcLogData(entryValue, depth + 1),
+    ]);
+    if (entries.length > 40) {
+      limitedEntries.push(["__truncatedKeys", entries.length - 40]);
+    }
+    return Object.fromEntries(limitedEntries);
+  }
+
   function stripPendingUiSlashMessages(agentId: string, messages: ChatMessage[]) {
     const pending = pendingUiSlashCommandRef.current;
     if (!pending || pending.agentId !== agentId) return messages;
@@ -421,6 +431,17 @@ export function App() {
     if (lastUserIndex == null) return messages;
     if (messages[lastUserIndex]?.text.trim() !== pending.command.trim()) return messages;
     return messages.filter((_, index) => index !== lastUserIndex);
+  }
+
+  function upsertAgentMessagePatch(messages: ChatMessage[], patch: AgentMessagePatch) {
+    const next = [...messages];
+    const index = next.findIndex((message) => message.id === patch.message.id);
+    if (index >= 0) {
+      next[index] = patch.message;
+      return next;
+    }
+    next.push(patch.message);
+    return next;
   }
   const [renamingFile, setRenamingFile] = useState<{
     path: string;
@@ -584,18 +605,10 @@ export function App() {
   const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_HEIGHT);
   const [composerAutoHeight, setComposerAutoHeight] =
     useState(COMPOSER_MIN_HEIGHT);
-  const [terminalDockStateByAgent, setTerminalDockStateByAgent] =
-    useState<TerminalDockStateByAgent>({});
-  const [terminalHeightByAgent, setTerminalHeightByAgent] = useState<
-    Record<string, number>
-  >({});
   const [listCollapsed, setListCollapsed] = useState(false);
   const [listHoverRevealSuppressed, setListHoverRevealSuppressed] =
     useState(false);
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
-  const [drawerPinnedByAgent, setDrawerPinnedByAgent] = useState<
-    Record<string, DrawerPanel>
-  >({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   // 记录当前文件树所属的项目 ID，切换项目时才重置展开状态
   const filesProjectIdRef = useRef<string | undefined>(undefined);
@@ -605,7 +618,8 @@ export function App() {
   const chatPaneRef = useRef<HTMLElement | null>(null);
   const chatHeaderRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLElement | null>(null);
-  const timelineRef = useRef<HTMLElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const virtualizedListRef = useRef<VirtualizedListHandle | null>(null);
   const composerBoxRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingAgentsRef = useRef<AgentTab[]>([]);
@@ -639,7 +653,7 @@ export function App() {
   const currentProjectPath = activeProject?.path ?? activeAgent?.cwd;
   const prompt = activeAgentId ? (promptByAgent[activeAgentId] ?? "") : "";
   const attachedImages = activeAgentId
-    ? (attachedImagesByAgent[activeAgentId] ?? [])
+    ? (conversationStateByAgent[activeAgentId]?.attachedImages ?? [])
     : [];
 
   function setPrompt(value: string | ((current: string) => string)) {
@@ -661,22 +675,10 @@ export function App() {
   }
 
   function setAttachedImages(
-    value: ImageContent[] | ((current: ImageContent[]) => ImageContent[]),
+    value: ComposerImage[] | ((current: ComposerImage[]) => ComposerImage[]),
   ) {
     if (!activeAgentId) return;
-    setAttachedImagesByAgent((current) => {
-      const previous = current[activeAgentId] ?? [];
-      const nextValue = typeof value === "function" ? value(previous) : value;
-      if (nextValue.length === 0) {
-        const next = { ...current };
-        delete next[activeAgentId];
-        return next;
-      }
-      return {
-        ...current,
-        [activeAgentId]: nextValue,
-      };
-    });
+    setConversationAttachedImages(activeAgentId, value);
   }
 
   function focusComposerTextarea() {
@@ -716,11 +718,12 @@ export function App() {
     : undefined;
   const drawerPinned = Boolean(drawerPinnedPanel);
   const activeMessages = activeAgentId
-    ? (messagesByAgent[activeAgentId] ?? [])
+    ? (conversationStateByAgent[activeAgentId]?.messages ?? [])
     : [];
   const activeRuntimeState = activeAgentId
     ? runtimeStateByAgent[activeAgentId]
     : undefined;
+  const [visibleRenderGroupCount, setVisibleRenderGroupCount] = useState(120);
 
   // 消息分页:超过 100 条消息时启用,大幅减少输入卡顿
   // 首屏 100 条,每次加载 100 条,一页一页懒加载
@@ -736,9 +739,17 @@ export function App() {
     enabled: activeMessages.length > 100, // 超过 100 条才启用
   });
 
-  const renderedMessages = useMemo(
+  const groupedMessages = useMemo(
     () => groupToolMessages(paginatedMessages),
     [paginatedMessages],
+  );
+  const renderedMessages = useMemo(() => {
+    const start = Math.max(0, groupedMessages.length - visibleRenderGroupCount);
+    return groupedMessages.slice(start);
+  }, [groupedMessages, visibleRenderGroupCount]);
+  const hiddenRenderGroupCount = Math.max(
+    0,
+    groupedMessages.length - renderedMessages.length,
   );
   const isUiSlashApprovalActive = Boolean(
     pendingUiSlashCommandAgentId === activeAgentId ||
@@ -755,7 +766,7 @@ export function App() {
   );
   /** 当前活跃 agent 的实时思考文本 */
   const activeThinking = activeAgentId
-    ? (streamingThinking[activeAgentId] ?? "")
+    ? (conversationStateByAgent[activeAgentId]?.streamingThinking ?? "")
     : "";
   const activeTerminalHeight = activeAgentId
     ? (terminalHeightByAgent[activeAgentId] ?? COMPOSER_DEFAULT_TERMINAL_HEIGHT)
@@ -806,53 +817,33 @@ export function App() {
     return () => media.removeEventListener?.("change", applyTheme);
   }, [settings.theme]);
 
-  /** 当前会话中 agent 修改过的文件(从 tool 消息 meta 中提取) */
-  // 优化:只在消息数量变化时才重新计算,减少不必要的遍历
-  const modifiedFiles = useMemo(() => {
-    const byPath = new Map<string, SessionModifiedFile>();
-    for (const msg of activeMessages) {
-      if (msg.role !== "tool") continue;
-      const toolName: string | undefined = msg.meta?.toolName as
-        | string
-        | undefined;
-      const args: any = msg.meta?.args;
-      const status: string = String(msg.meta?.status ?? "done");
-      // 只收集文件写入/编辑类的工具调用，作为右侧 Files 与会话结束摘要的统一数据源。
-      if (!toolName || !/write|edit|create/i.test(toolName)) continue;
-      const filePath =
-        typeof args?.filePath === "string"
-          ? args.filePath
-          : typeof args?.path === "string"
-            ? args.path
-            : typeof args?.file === "string"
-              ? args.file
-              : typeof args?.fileName === "string"
-                ? args.fileName
-                : undefined;
-      if (!filePath) continue;
-      const previous = byPath.get(filePath);
-      // 同一路径再次被修改时移动到 Map 末尾，右侧修改清单才能按"最新修改"展示。
-      if (previous) byPath.delete(filePath);
-      // 从消息 meta 中提取工具执行前的文件原始内容，用于差异编辑器的对比基准。
-      const originalContent = msg.meta?.originalContent as string | undefined;
-      byPath.set(filePath, {
-        path: filePath,
-        toolName,
-        status: status === "running" ? "running" : (previous?.status ?? status),
-        changedLines:
-          (previous?.changedLines ?? 0) +
-          getToolChangedLineCount(toolName, args),
-        // 同一路径多次修改时保留首次记录的 originalContent，历史会话恢复时优先使用
-        originalContent: previous?.originalContent ?? originalContent ?? "",
-      });
-    }
-    return Array.from(byPath.values());
-  }, [activeMessages.length, activeAgentId]);
-  // 优化:轮廓项计算仅在消息数量变化时触发,减少不必要的重计算
-  const outlineItems = useMemo(
-    () => buildOutline(activeMessages),
-    [activeMessages.length, activeAgentId],
-  );
+  const modifiedFiles = activeAgentId
+    ? (conversationStateByAgent[activeAgentId]?.modifiedFiles ?? [])
+    : [];
+  const outlineItems = useMemo(() => {
+    if (!activeAgentId) return [];
+    const storedOutlineByMessageId = new Map(
+      (conversationStateByAgent[activeAgentId]?.outlineItems ?? []).map((item) => [item.id, item]),
+    );
+    return renderedMessages
+      .map((item) => {
+        if (item.kind === "message") {
+          const source = storedOutlineByMessageId.get(item.message.id);
+          return source ? { ...source, id: item.message.id } : null;
+        }
+        if (item.kind !== "agent-run") return null;
+        const assistantMessage = item.items.find(
+          (runItem) => runItem.kind === "message" && runItem.message.role === "assistant",
+        );
+        if (!assistantMessage || assistantMessage.kind !== "message") return null;
+        const source = assistantMessage.message.id
+          .split("|")
+          .map((messageId) => storedOutlineByMessageId.get(messageId))
+          .find(Boolean);
+        return source ? { ...source, id: item.id } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  }, [activeAgentId, conversationStateByAgent, renderedMessages]);
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
   // 优化:建议项计算仅在必要时触发,避免每次输入都重计算导致卡顿
   // 只有当建议框打开时才计算,关闭时返回空数组
@@ -869,6 +860,10 @@ export function App() {
     [displayAgents, search],
   );
   const filteredAgents = visibleAgents;
+  useEffect(() => {
+    setVisibleRenderGroupCount(120);
+  }, [activeAgentId, paginatedMessages.length]);
+
   const filteredProjects = useMemo(
     () =>
       projects.filter((project) => {
@@ -1022,31 +1017,18 @@ export function App() {
       setPromptByAgent((current) =>
         migrateAgentRecord(current, pendingReplacementById, draftIds),
       );
-      setAttachedImagesByAgent((current) =>
-        migrateAgentRecord(current, pendingReplacementById, draftIds),
-      );
+      migrateConversationAgents(pendingReplacementById, draftIds);
     });
-    // 优化:历史会话加载时消息更新频繁,只在消息真正变化时更新 state,避免不必要的重渲染导致输入卡顿
-    const offMessages = api.agents.onMessages((payload) =>
-      setMessagesByAgent((current) => {
-        const nextPayloadMessages = stripPendingUiSlashMessages(
-          payload.agentId,
-          payload.messages,
-        );
-        const prevMessages = current[payload.agentId];
-        // 消息数量相同且引用相同时跳过更新,减少输入框重渲染
-        if (
-          prevMessages?.length === nextPayloadMessages.length &&
-          prevMessages === nextPayloadMessages
-        ) {
-          return current;
-        }
-        return {
-          ...current,
-          [payload.agentId]: nextPayloadMessages,
-        };
-      }),
-    );
+    const offMessages = api.agents.onMessages((payload) => {
+      const nextPayloadMessages = stripPendingUiSlashMessages(
+        payload.agentId,
+        payload.messages,
+      );
+      replaceMessages(payload.agentId, nextPayloadMessages);
+    });
+    const offMessagePatch = api.agents.onMessagePatch((payload) => {
+      applyMessagePatch(payload.agentId, payload);
+    });
     const offLog = api.agents.onLog((payload) =>
       setLogs((current) => {
         // 优化:只在超过200条时才slice,减少不必要的数组操作
@@ -1073,22 +1055,7 @@ export function App() {
             (pendingUiSlash && pendingUiSlash.agentId === payload.agentId),
           );
           if (pendingUiSlash && pendingUiSlash.agentId === payload.agentId) {
-            setMessagesByAgent((current) => {
-              const agentMessages = current[payload.agentId] ?? [];
-              const trimmedCommand = pendingUiSlash.command.trim();
-              const lastUserIndex = [...agentMessages]
-                .map((message, index) => ({ message, index }))
-                .reverse()
-                .find(({ message }) => message.role === "user")?.index;
-              if (lastUserIndex == null) return current;
-              const lastUserMessage = agentMessages[lastUserIndex];
-              if (lastUserMessage.text.trim() !== trimmedCommand) return current;
-              const nextMessages = agentMessages.filter((_, index) => index !== lastUserIndex);
-              return {
-                ...current,
-                [payload.agentId]: nextMessages,
-              };
-            });
+            removePendingCommandMessage(payload.agentId, pendingUiSlash.command);
           }
           if (shouldClearPendingUiSlash) pendingUiSlashCommandRef.current = null;
         }
@@ -1116,10 +1083,7 @@ export function App() {
     );
     // 监听流式思考内容更新,用于在 agent 响应前展示推理过程
     const offThinking = api.agents.onThinking((payload: ThinkingUpdate) =>
-      setStreamingThinking((current) => ({
-        ...current,
-        [payload.agentId]: payload.thinking,
-      })),
+      setThinking(payload.agentId, payload.thinking),
     );
     // 监听 RPC 日志,保留最近 2000 条用于调试;message_update 高频事件很多,
     // 200 条很容易在一次长响应中被刷掉,但仍设置上限避免 renderer 内存无限增长。
@@ -1131,7 +1095,7 @@ export function App() {
           agentId: payload.agentId,
           direction: payload.direction,
           summary: payload.summary,
-          data: payload.data,
+          data: compactRpcLogData(payload.data),
           time: Date.now(),
         };
         if (current.length < 2000) {
@@ -1151,6 +1115,7 @@ export function App() {
       offProjects();
       offState();
       offMessages();
+      offMessagePatch();
       offLog();
       offEvent();
       offSettings();
@@ -1298,9 +1263,7 @@ export function App() {
   }
 
   function scrollToBottom() {
-    const timeline = timelineRef.current;
-    if (!timeline) return;
-    timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
+    virtualizedListRef.current?.scrollToBottom("smooth");
     setAutoScroll(true);
     setShowScrollToBottom(false);
   }
@@ -1413,38 +1376,11 @@ export function App() {
   }, [commandHistory]);
 
   useEffect(() => {
-    const timeline = timelineRef.current;
-    if (!timeline || !autoScroll) return;
-    // 历史会话加载后默认跳到最新消息,符合聊天软件的阅读习惯,避免用户手动滚动到底部。
+    if (!autoScroll) return;
     requestAnimationFrame(() => {
-      timeline.scrollTop = timeline.scrollHeight;
+      virtualizedListRef.current?.scrollToBottom("auto");
     });
   }, [activeAgentId, activeMessages.length, autoScroll]);
-
-  // 监听用户滚动,判断是否需要显示"移动到最新"按钮
-  useEffect(() => {
-    const timeline = timelineRef.current;
-    if (!timeline) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = timeline;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-
-      if (isAtBottom) {
-        setAutoScroll(true);
-        setShowScrollToBottom(false);
-      } else {
-        setAutoScroll(false);
-        setShowScrollToBottom(true);
-      }
-    };
-
-    // 初始化时检查一次
-    handleScroll();
-
-    timeline.addEventListener("scroll", handleScroll);
-    return () => timeline.removeEventListener("scroll", handleScroll);
-  }, [activeAgentId]);
 
   // 追踪 agent 会话开始/结束时间,计算会话时长
 
@@ -1452,16 +1388,8 @@ export function App() {
     for (const agent of displayAgents) {
       if (agent.id !== activeAgentId) continue;
       const previousStatus = agentStatusByAgentRef.current[agent.id];
-      if (agent.status === "running") {
-        if (previousStatus !== "running") {
-          sessionStartByAgentRef.current[agent.id] = Date.now();
-          // Files 面板展示会话总览;聊天流只展示本轮回答新增触达的文件。
-          // 基线记录累计行数而不是仅记录路径:同一个文件在后续回答再次被编辑时也要显示。
-          turnFileBaselineByAgentRef.current[agent.id] = new Map(
-            modifiedFiles.map((file) => [file.path, file]),
-          );
-          finalizedTurnByAgentRef.current[agent.id] = null;
-        }
+      if (agent.status === "running" && previousStatus !== "running") {
+        sessionStartByAgentRef.current[agent.id] = Date.now();
       } else if (agent.status === "idle") {
         const start = sessionStartByAgentRef.current[agent.id];
         if (start) {
@@ -1470,40 +1398,11 @@ export function App() {
             [agent.id]: Date.now() - start,
           }));
         }
-        const lastAssistantMessage = [...(messagesByAgent[agent.id] ?? [])]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        const baseline =
-          turnFileBaselineByAgentRef.current[agent.id] ??
-          new Map<string, SessionModifiedFile>();
-        const turnModifiedFiles = modifiedFiles
-          .map<SessionModifiedFile | null>((file) => {
-            const baselineFile = baseline.get(file.path);
-            const changedLines = Math.max(
-              0,
-              (file.changedLines ?? 0) - (baselineFile?.changedLines ?? 0),
-            );
-            return changedLines > 0 || !baselineFile
-              ? { ...file, changedLines }
-              : null;
-          })
-          .filter((file): file is SessionModifiedFile => Boolean(file));
-
-        if (
-          lastAssistantMessage &&
-          turnModifiedFiles.length > 0 &&
-          finalizedTurnByAgentRef.current[agent.id] !== lastAssistantMessage.id
-        ) {
-          finalizedTurnByAgentRef.current[agent.id] = lastAssistantMessage.id;
-          setTurnFileSummaryByMessage((current) => ({
-            ...current,
-            [lastAssistantMessage.id]: turnModifiedFiles,
-          }));
-        }
+        void finalizeTurnSummary(agent);
       }
       agentStatusByAgentRef.current[agent.id] = agent.status;
     }
-  }, [displayAgents, activeAgentId, modifiedFiles, messagesByAgent]);
+  }, [displayAgents, activeAgentId, finalizeTurnSummary]);
 
   useEffect(() => {
     const nextBusyByAgent: Record<string, boolean> = {};
@@ -1568,7 +1467,9 @@ export function App() {
   // 检测 goal_complete tool call → 标记 goal 完成
   useEffect(() => {
     if (goalStatusRef.current !== "active") return;
-    const goalAgentMessages = activeAgentId ? messagesByAgent[activeAgentId] : undefined;
+    const goalAgentMessages = activeAgentId
+      ? conversationStateByAgent[activeAgentId]?.messages
+      : undefined;
     if (!goalAgentMessages) return;
     for (let i = goalAgentMessages.length - 1; i >= 0; i--) {
       const message = goalAgentMessages[i];
@@ -1580,7 +1481,7 @@ export function App() {
         break;
       }
     }
-  }, [messagesByAgent, activeAgentId]);
+  }, [conversationStateByAgent, activeAgentId]);
 
   // 监听用户发送消息的编辑事件,将消息填入输入框
   useEffect(() => {
@@ -1686,19 +1587,21 @@ export function App() {
   useEffect(() => {
     if (!activeProjectId) return;
     let stopped = false;
+    const shouldPollGit = () =>
+      !document.hidden &&
+      Boolean(activeProjectId) &&
+      Boolean(activeAgentIdRef.current || drawer === "files");
     const refreshGitInfo = async () => {
+      if (!shouldPollGit()) return;
       try {
-        // 轮询分支信息
         const next = await api.git.branches(activeProjectId);
         if (stopped) return;
-        // 分支可能在外部终端/IDE 中切换,轮询只在状态真的变化时更新,避免不必要重渲染。
         setGitInfo((current) =>
           current.current === next.current &&
           current.branches.join("\n") === next.branches.join("\n")
             ? current
             : next,
         );
-        // 同时刷新 Git 工作区变更文件列表（对比 HEAD）
         const changed = await api.git.changedFiles(activeProjectId);
         if (!stopped) setGitChangedFiles(changed);
       } catch {
@@ -1708,12 +1611,20 @@ export function App() {
         }
       }
     };
-    const timer = window.setInterval(refreshGitInfo, 4000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshGitInfo();
+    };
+    void refreshGitInfo();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const timer = window.setInterval(() => {
+      void refreshGitInfo();
+    }, 4000);
     return () => {
       stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(timer);
     };
-  }, [activeProjectId]);
+  }, [activeProjectId, drawer]);
 
   async function checkPiInstall(source: "startup" | "manual" = "manual") {
     setSettingsOpen(false);
@@ -2562,13 +2473,7 @@ export function App() {
         delete next[pendingTab.id];
         return next;
       });
-      setAttachedImagesByAgent((current) => {
-        const draft = current[pendingTab.id];
-        if (draft == null) return current;
-        const next = { ...current, [tab.id]: draft };
-        delete next[pendingTab.id];
-        return next;
-      });
+      transferAgentDraft(pendingTab.id, tab.id);
       void refreshProjectSessions(projectId).catch(() => undefined);
       void refreshRuntimeState(tab.id);
       return tab;
@@ -3057,7 +2962,7 @@ export function App() {
     if (wasBusy && !busy && goalStatusRef.current === "active" && activeAgentId) {
       const text = goalTextRef.current;
       // 直接扫描消息确认是否有 goal_complete（防范 effect 时序问题）
-      const goalMsgs = activeAgentId ? messagesByAgent[activeAgentId] : undefined;
+      const goalMsgs = activeAgentId ? conversationStateByAgent[activeAgentId]?.messages : undefined;
       if (goalMsgs?.some((m) => m.role === "tool" && m.meta?.toolName === "goal_complete")) {
         goalStatusRef.current = "complete";
         setGoalStatus("complete");
@@ -3114,7 +3019,7 @@ ${text}
     await submitComposerPrompt(prompt, images);
   }
 
-  async function submitComposerPrompt(message: string, images?: ImageContent[]) {
+  async function submitComposerPrompt(message: string, images?: ComposerImage[]) {
     if (isUiSlashApprovalActive) {
       showToast(t("app.uiSlashCommandPending"), 2200);
       return;
@@ -3303,7 +3208,7 @@ ${goalTextRef.current}
   async function submitPromptSnapshot(
     agentId: string,
     message: string,
-    images?: ImageContent[],
+    images?: ComposerImage[],
     streamingBehavior?: "steer" | "followUp",
     uiSlashCommand?: boolean,
   ) {
@@ -3352,7 +3257,7 @@ ${goalTextRef.current}
    * 处理图片文件,转为 pi RPC 可识别的 ImageContent。
    * 大图会压缩到最长边 2000px,避免 base64 过大导致 RPC 传输和模型上下文成本上升。
    */
-  async function processImageFile(file: File): Promise<ImageContent | null> {
+  async function processImageFile(file: File): Promise<ComposerImage | null> {
     const maxSize = 10 * 1024 * 1024; // 原始文件 10MB 限制,避免误粘超大图片卡住渲染进程
     if (file.size > maxSize) {
       showToast(t("app.imageTooLarge"), 3000);
@@ -3365,11 +3270,10 @@ ${goalTextRef.current}
       return null;
     }
 
-    // GIF 可能是动图,canvas 压缩会丢失动画;保留原始数据。
-    if (file.type === "image/gif") return fileToImageContent(file);
-    return resizeImageFile(file, 2000, 0.86).catch(() =>
-      fileToImageContent(file),
-    );
+    const image = file.type === "image/gif"
+      ? await fileToImageContent(file)
+      : await resizeImageFile(file, 2000, 0.86).catch(() => fileToImageContent(file));
+    return api.images.createAsset(image);
   }
 
   function fileToImageContent(file: File): Promise<ImageContent> {
@@ -3466,12 +3370,23 @@ ${goalTextRef.current}
 
   /** 移除已附加的图片 */
   function removeImage(index: number) {
-    setAttachedImages((prev) => prev.filter((_, i) => i !== index));
+    setAttachedImages((prev) => {
+      const removed = prev[index];
+      if (removed?.type === "image-asset") {
+        void api.images.deleteAsset(removed);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   /** 清空所有附加图片 */
   function clearImages() {
-    setAttachedImages([]);
+    setAttachedImages((prev) => {
+      for (const image of prev) {
+        if (image.type === "image-asset") void api.images.deleteAsset(image);
+      }
+      return [];
+    });
   }
 
   async function updateSettings(patch: Partial<AppSettings>) {
@@ -4412,7 +4327,7 @@ ${goalTextRef.current}
             />
           )}
 
-          {/* 加载更多历史消息按钮 */}
+          {/* 先放开消息分页,再放开当前页内较旧的分组渲染,避免长会话一次挂太多动态高度节点。 */}
           {hasMoreMessages && activeAgent && activeAgent.status !== "starting" && (
             <div className="message-pagination">
               <button
@@ -4428,6 +4343,20 @@ ${goalTextRef.current}
               </button>
             </div>
           )}
+          {hiddenRenderGroupCount > 0 && activeAgent && activeAgent.status !== "starting" && (
+            <div className="message-pagination">
+              <button
+                className="message-pagination-button"
+                onClick={() =>
+                  setVisibleRenderGroupCount((current) => current + 80)
+                }
+              >
+                {t("app.loadMoreRenderedGroups", {
+                  count: hiddenRenderGroupCount,
+                })}
+              </button>
+            </div>
+          )}
 
           {activeAgent?.status === "starting" && (
             <div className="history-loading">
@@ -4439,58 +4368,30 @@ ${goalTextRef.current}
             <div className="chat-timeline-empty" />
           )}
           {activeAgent && (
-            <div className="message-list">
-              {renderedMessages.map((item) =>
-                item.kind === "agent-run" ? (
-                  <AgentRun
-                    key={item.id}
-                    run={item}
-                    onPreviewImage={setPreviewImage}
-                    onOpenExternal={(url) => api.app.openExternal(url)}
-                    onOpenFile={openFilePath}
-                    onDiffFile={diffFilePath}
-                    onUndoUserMessage={undoUserMessage}
-                    onResendUserMessage={resendUserMessage}
-                    showThinking={settings.showThinking}
-                    fileSummariesByMessage={turnFileSummaryByMessage}
-                  />
-                ) : item.kind === "tool-group" ? (
-                  <ToolGroup key={item.id} group={item} />
-                ) : item.kind === "thinking-group" ? (
-                  <ThinkingGroup
-                    key={item.id}
-                    group={item}
-                    showThinking={settings.showThinking}
-                  />
-                ) : (
-                  <Fragment key={item.message.id}>
-                    <ChatBubble
-                      message={item.message}
-                      onPreviewImage={setPreviewImage}
-                      onOpenExternal={(url) => api.app.openExternal(url)}
-                      onOpenFile={openFilePath}
-                      onUndoUserMessage={undoUserMessage}
-                      onResendUserMessage={resendUserMessage}
-                      showThinking={settings.showThinking}
-                    />
-                    {item.message.role === "assistant" &&
-                      turnFileSummaryByMessage[item.message.id]?.length > 0 && (
-                        <SessionFileSummary
-                          files={turnFileSummaryByMessage[item.message.id]}
-                          onOpenFile={openFilePath}
-                          onDiffFile={diffFilePath}
-                        />
-                      )}
-                  </Fragment>
-                ),
-              )}
-              {isAwaitingAssistant && (
-                <ThinkingBubble
-                  thinking={activeThinking}
-                  showThinking={settings.showThinking}
-                />
-              )}
-            </div>
+            <VirtualizedMessageList
+              ref={virtualizedListRef}
+              scrollContainerRef={timelineRef}
+              className="message-list"
+              items={renderedMessages}
+              activeThinking={activeThinking}
+              awaitingAssistant={isAwaitingAssistant}
+              showThinking={settings.showThinking}
+              fileSummariesByMessage={
+                activeAgentId
+                  ? (conversationStateByAgent[activeAgentId]?.turnFileSummaryByMessage ?? {})
+                  : {}
+              }
+              onPreviewImage={setPreviewImage}
+              onOpenExternal={(url) => api.app.openExternal(url)}
+              onOpenFile={openFilePath}
+              onDiffFile={diffFilePath}
+              onUndoUserMessage={undoUserMessage}
+              onResendUserMessage={resendUserMessage}
+              onScrollStateChange={({ atBottom }) => {
+                setAutoScroll(atBottom);
+                setShowScrollToBottom(!atBottom);
+              }}
+            />
           )}
 
           {showScrollToBottom && (
@@ -4508,9 +4409,7 @@ ${goalTextRef.current}
           <ConversationOutline
             items={outlineItems}
             onJump={(id) =>
-              document
-                .querySelector(`[data-message-id="${CSS.escape(id)}"]`)
-                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              virtualizedListRef.current?.scrollToKey(id, "smooth")
             }
           />
         )}
@@ -4542,7 +4441,7 @@ ${goalTextRef.current}
               {attachedImages.map((img, index) => (
                 <div key={index} className="image-preview-item">
                   <img
-                    src={`data:${img.mimeType};base64,${img.data}`}
+                    src={img.type === "image-asset" ? (img.previewUrl ?? "") : `data:${img.mimeType};base64,${img.data}`}
                     alt={t("app.imageAlt", { index: index + 1 })}
                     onClick={() => setPreviewImage(img)}
                     style={{ cursor: "pointer" }}

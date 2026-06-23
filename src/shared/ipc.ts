@@ -64,6 +64,8 @@ export const ipcChannels = {
 	agentsStop: "agents:stop",
 	agentsPrompt: "agents:prompt",
 	agentsUndoMessage: "agents:undo-message",
+	imagesCreateAsset: "images:create-asset",
+	imagesDeleteAsset: "images:delete-asset",
 	agentsAbort: "agents:abort",
 	agentsExportHtml: "agents:export-html",
 	agentsForkMessages: "agents:fork-messages",
@@ -82,6 +84,7 @@ export const ipcChannels = {
 	agentsEvent: "agents:event",
 	agentsRespondServerRequest: "agents:respond-server-request",
 	agentsMessage: "agents:message",
+	agentsMessagePatch: "agents:message-patch",
 	agentsLog: "agents:log",
 
 	/** 流式思考内容更新，agent 忙碌时实时推送当前思考文本 */

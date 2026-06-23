@@ -1,7 +1,10 @@
 import type { PiDesktopApi } from "../../preload";
 import type {
+	AgentMessagePatch,
 	AgentTab,
 	AppSettings,
+	ImageAssetRef,
+	ImageContent,
 	ChatMessage,
 	FileTreeNode,
 	Project,
@@ -369,6 +372,17 @@ export function createPreviewApi(): PiDesktopApi {
 			}),
 			onApplyWindow: noop,
 		},
+		images: {
+			createAsset: async (image: ImageContent): Promise<ImageAssetRef> => ({
+				type: "image-asset",
+				assetId: `preview-${Date.now()}`,
+				assetPath: "C:/Users/preview/image-assets/preview.png",
+				mimeType: image.mimeType,
+				size: image.data.length,
+				previewUrl: `data:${image.mimeType};base64,${image.data}`,
+			}),
+			deleteAsset: async () => undefined,
+		},
 		quickPrompts: {
 			get: async () => ({ ...previewQuickPromptState, presets: [...previewQuickPromptState.presets] }),
 			update: async (state) => {
@@ -500,6 +514,8 @@ export function createPreviewApi(): PiDesktopApi {
 				setTimeout(() => callback({ agentId: "preview-agent", messages: getMessages() }), 0);
 				return () => undefined;
 			}) as any,
+			onMessagePatch: ((_callback: (payload: AgentMessagePatch) => void) =>
+				() => undefined) as any,
 			onLog: noop,
 			onThinking: noop,
 			onRpcLog: noop,

@@ -6,9 +6,13 @@ import type { SessionSummary } from "../../shared/types";
 
 export class SessionScanner {
   private readonly root = join(app.getPath("home"), ".pi", "agent", "sessions");
+  private readonly summaryCache = new Map<string, SessionSummary | null>();
+  private readonly directoryIndexCache = new Map<string, { expiresAt: number; files: string[] }>();
+  private readonly maxSummaryCacheEntries = 1000;
+  private readonly directoryIndexTtlMs = 15_000;
 
   async list(projectPath?: string): Promise<SessionSummary[]> {
-    const files = await this.collectJsonl(this.root).catch(() => [] as string[]);
+    const files = await this.listCandidateFiles(projectPath);
     const summaries = await Promise.all(files.map(file => this.readSummary(file).catch(() => null)));
 
     return summaries
@@ -25,6 +29,7 @@ export class SessionScanner {
     const raw = await readFile(filePath, "utf8");
     const meta = JSON.stringify({ sessionName: newName, ts: Date.now() });
     await writeFile(filePath, `${meta}\n${raw}`, "utf8");
+    this.clearCachesFor(filePath);
   }
 
   /**
@@ -45,6 +50,7 @@ export class SessionScanner {
       throw new Error("只允许删除 sessions 目录内的 .jsonl 会话文件");
     }
     await unlink(resolvedPath);
+    this.clearCachesFor(resolvedPath);
   }
 
   /**
@@ -58,6 +64,7 @@ export class SessionScanner {
     const targetPath = this.nextCopyPath(filePath);
     const meta = JSON.stringify({ sessionName: copyName, copiedFrom: filePath, ts: Date.now() });
     await writeFile(targetPath, `${meta}\n${raw}`, "utf8");
+    this.clearCachesFor(targetPath);
     const summary = await this.readSummary(targetPath);
     if (!summary) throw new Error("复制后的会话文件无法读取");
     return summary;
@@ -105,6 +112,10 @@ export class SessionScanner {
   }
 
   private async collectJsonl(dir: string): Promise<string[]> {
+    const cached = this.directoryIndexCache.get(dir);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.files;
+
     const entries = await readdir(dir, { withFileTypes: true });
     const files: string[] = [];
 
@@ -114,13 +125,25 @@ export class SessionScanner {
       else if (entry.isFile() && entry.name.endsWith(".jsonl")) files.push(path);
     }
 
+    this.directoryIndexCache.set(dir, {
+      expiresAt: now + this.directoryIndexTtlMs,
+      files,
+    });
     return files;
   }
 
   private async readSummary(filePath: string): Promise<SessionSummary | null> {
-    const [raw, info] = await Promise.all([readFile(filePath, "utf8"), stat(filePath)]);
+    const info = await stat(filePath);
+    const cacheKey = `${filePath}:${info.mtimeMs}:${info.size}`;
+    const cached = this.summaryCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const raw = await readFile(filePath, "utf8");
     const lines = raw.split(/\r?\n/).filter(Boolean);
-    if (lines.length === 0) return null;
+    if (lines.length === 0) {
+      this.setSummaryCache(cacheKey, null);
+      return null;
+    }
 
     let name: string | undefined;
     let projectPath: string | undefined;
@@ -146,7 +169,7 @@ export class SessionScanner {
 
     const inferredName = this.cleanTitle(name) || this.cleanTitle(firstUserText) || this.cleanTitle(firstAssistantText) || "Untitled";
 
-    return {
+    const summary = {
       id: filePath,
       filePath,
       projectPath: projectPath ? this.normalize(projectPath) : this.inferProjectPathFromFile(filePath),
@@ -155,6 +178,40 @@ export class SessionScanner {
       updatedAt: info.mtimeMs,
       messageCount,
     };
+    this.setSummaryCache(cacheKey, summary);
+    return summary;
+  }
+
+  private setSummaryCache(key: string, summary: SessionSummary | null) {
+    this.summaryCache.set(key, summary);
+    while (this.summaryCache.size > this.maxSummaryCacheEntries) {
+      const oldestKey = this.summaryCache.keys().next().value;
+      if (!oldestKey) break;
+      this.summaryCache.delete(oldestKey);
+    }
+  }
+
+  private async listCandidateFiles(projectPath?: string) {
+    if (!projectPath) return this.collectJsonl(this.root).catch(() => [] as string[]);
+    const preferredDir = join(this.root, this.safePathToken(projectPath));
+    return this.collectJsonl(preferredDir).catch(() => [] as string[]);
+  }
+
+  private clearCachesFor(filePath: string) {
+    this.summaryCache.clear();
+    const normalized = resolve(filePath);
+    const normalizedParent = resolve(dirname(filePath));
+    for (const key of [...this.directoryIndexCache.keys()]) {
+      const resolvedKey = resolve(key);
+      if (
+        normalized.startsWith(resolvedKey) ||
+        resolvedKey.startsWith(normalized) ||
+        normalizedParent.startsWith(resolvedKey) ||
+        resolvedKey.startsWith(normalizedParent)
+      ) {
+        this.directoryIndexCache.delete(key);
+      }
+    }
   }
 
   private extractText(content: unknown): string {

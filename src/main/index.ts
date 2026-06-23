@@ -57,6 +57,7 @@ import { RemarkStore } from "./metadata/RemarkStore";
 import { PiUpdateChecker } from "./pi/PiUpdateChecker";
 import { checkForAppUpdate, RELEASES_URL } from "./update/AppUpdateChecker";
 import { WebServiceManager } from "./web/WebServiceManager";
+import { ImageAssetStore } from "./images/ImageAssetStore";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -81,6 +82,7 @@ let remarkStore: RemarkStore;
 let piUpdateChecker: PiUpdateChecker;
 let webServiceManager: WebServiceManager;
 let terminalManager: TerminalSessionManager;
+let imageAssetStore: ImageAssetStore;
 
 const POSTHOG_PROJECT_KEY =
 	process.env.POSTHOG_PROJECT_KEY ??
@@ -611,10 +613,18 @@ function registerIpc() {
 		ipcChannels.sessionsList,
 		async (_event, projectId?: string) => {
 			const project = projectId ? projectStore.get(projectId) : undefined;
-			const sessions = await sessionScanner.list(project?.path);
+			if (projectId && !project) return [];
+			const projectPath = projectId ? project!.path : undefined;
+			const sessions = await sessionScanner.list(projectPath);
 			return projectId ? await sessionPinStore.decorate(projectId, sessions) : sessions;
 		},
 	);
+	ipcMain.handle(ipcChannels.imagesCreateAsset, async (_event, image) => {
+		return imageAssetStore.createFromBase64(image);
+	});
+	ipcMain.handle(ipcChannels.imagesDeleteAsset, async (_event, image) => {
+		await imageAssetStore.remove(image);
+	});
 	ipcMain.handle(
 		ipcChannels.sessionsTogglePinned,
 		async (_event, projectId: string, filePath: string) => {
@@ -1135,6 +1145,7 @@ if (!gotSingleInstanceLock) {
 	app.whenReady().then(async () => {
 		projectStore = new ProjectStore();
 		fileSystemService = new FileSystemService();
+		imageAssetStore = new ImageAssetStore();
 		sessionScanner = new SessionScanner();
 		remarkStore = new RemarkStore();
 		sessionPinStore = new SessionPinStore();
@@ -1170,13 +1181,15 @@ if (!gotSingleInstanceLock) {
 			(id) => projectStore.get(id),
 			() => mainWindow,
 			settingsStore,
+			imageAssetStore,
 		);
 		webServiceManager = new WebServiceManager({
 			listProjects: () => projectStore.list(),
 			listAgents: () => agentManager.list(),
 			listSessions: (projectId) => {
 				const project = projectStore.get(projectId);
-				return sessionScanner.list(project?.path);
+				if (!project) return Promise.resolve([]);
+				return sessionScanner.list(project.path);
 			},
 			getMessages: (agentId) => agentManager.getMessages(agentId),
 			createAgent: (input) => agentManager.create(input),
