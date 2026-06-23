@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createDefaultQuickPrompts } from "../../shared/quickPrompts";
 import type { AppSettings, AppWindowState } from "../../shared/types";
 
 const defaultSettings: AppSettings = {
@@ -30,6 +31,8 @@ const defaultSettings: AppSettings = {
   linkOpenMode: "external",
   maxEditorFileSizeMB: 5,
   providerPrefixes: {} as Record<string, string>,
+  quickPrompts: createDefaultQuickPrompts(),
+  quickPromptDraft: "",
 };
 
 export class SettingsStore {

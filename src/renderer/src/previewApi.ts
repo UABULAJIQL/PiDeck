@@ -10,6 +10,7 @@ import type {
 	TerminalExitEvent,
 	TerminalTab,
 } from "../../shared/types";
+import { createDefaultQuickPrompts } from "../../shared/quickPrompts";
 import { t } from "./i18n";
 
 const now = Date.now();
@@ -143,6 +144,8 @@ let previewSettings: AppSettings = {
 	linkOpenMode: "external",
 	maxEditorFileSizeMB: 5,
 	providerPrefixes: {} as Record<string, string>,
+	quickPrompts: createDefaultQuickPrompts(),
+	quickPromptDraft: "",
 };
 
 export function createPreviewApi(): PiDesktopApi {

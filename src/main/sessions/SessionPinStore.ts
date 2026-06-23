@@ -67,19 +67,19 @@ export class SessionPinStore {
 
 	private parseState(value: unknown): PinState {
 		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-		return Object.fromEntries(
-			Object.entries(value).flatMap(([key, pinValue]) => {
-				if (
-					!pinValue ||
-					typeof pinValue !== "object" ||
-					Array.isArray(pinValue) ||
-					typeof (pinValue as { pinnedAt?: unknown }).pinnedAt !== "number"
-				) {
-					return [];
-				}
-				return [[key, { pinnedAt: (pinValue as { pinnedAt: number }).pinnedAt }] as const];
-			}),
-		);
+		const state: PinState = {};
+		for (const [key, pinValue] of Object.entries(value)) {
+			if (
+				!pinValue ||
+				typeof pinValue !== "object" ||
+				Array.isArray(pinValue) ||
+				typeof (pinValue as { pinnedAt?: unknown }).pinnedAt !== "number"
+			) {
+				continue;
+			}
+			state[key] = { pinnedAt: (pinValue as { pinnedAt: number }).pinnedAt };
+		}
+		return state;
 	}
 
 	private getPinEntry(projectId: string, filePath: string) {

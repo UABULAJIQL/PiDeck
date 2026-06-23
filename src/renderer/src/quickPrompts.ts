@@ -1,43 +1,17 @@
-import { useEffect, useState } from "react";
-import type { QuickPromptPreset } from "./quickPromptTypes";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { areQuickPromptPresetsEqual } from "../../shared/quickPrompts";
+import type { AppSettings, QuickPromptPreset } from "../../shared/types";
 
-const QUICK_PROMPTS_STORAGE_KEY = "pi-desktop:quick-prompts";
-const DEFAULT_QUICK_PROMPTS = [
-  "先总结当前上下文，再给出执行计划。",
-  "先定位根因，再给出最小修改方案。",
-  "请先阅读相关文件，并列出你将修改的点。",
-] satisfies string[];
+export type QuickPromptSettingsPatch = Pick<
+  AppSettings,
+  "quickPrompts" | "quickPromptDraft"
+>;
 
-function createDefaultQuickPrompts(): QuickPromptPreset[] {
-  return DEFAULT_QUICK_PROMPTS.map((content, index) => ({
-    id: `default-${index + 1}`,
-    content,
-  }));
-}
-
-function loadQuickPromptPresets(): QuickPromptPreset[] {
-  if (typeof window === "undefined") return createDefaultQuickPrompts();
-  try {
-    const raw = window.localStorage.getItem(QUICK_PROMPTS_STORAGE_KEY);
-    if (!raw) return createDefaultQuickPrompts();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return createDefaultQuickPrompts();
-    const normalized = parsed
-      .map((item) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-        const { id, content } = item as { id?: unknown; content?: unknown };
-        if (typeof id !== "string" || !id.trim()) return null;
-        if (typeof content !== "string") return null;
-        const trimmedContent = content.trim();
-        if (!trimmedContent) return null;
-        return { id, content: trimmedContent };
-      })
-      .filter((item): item is QuickPromptPreset => Boolean(item));
-    return normalized.length > 0 ? normalized : createDefaultQuickPrompts();
-  } catch {
-    return createDefaultQuickPrompts();
-  }
-}
+type UseQuickPromptPresetsOptions = {
+  settings: QuickPromptSettingsPatch;
+  settingsLoaded: boolean;
+  updateSettings: (patch: QuickPromptSettingsPatch) => Promise<void>;
+};
 
 function createQuickPromptId() {
   if (
@@ -49,24 +23,70 @@ function createQuickPromptId() {
   return `quick-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function useQuickPromptPresets() {
-  const [quickPrompts, setQuickPrompts] = useState<QuickPromptPreset[]>(() =>
-    loadQuickPromptPresets(),
+export function useQuickPromptPresets({
+  settings,
+  settingsLoaded,
+  updateSettings,
+}: UseQuickPromptPresetsOptions) {
+  const [quickPrompts, setQuickPrompts] = useState<QuickPromptPreset[]>(
+    settings.quickPrompts,
   );
-  const [quickPromptDraft, setQuickPromptDraft] = useState("");
+  const [quickPromptDraft, setQuickPromptDraft] = useState(
+    settings.quickPromptDraft,
+  );
+  const quickPromptSettingsHydratedRef = useRef(false);
+  const quickPromptHydratingFromSettingsRef = useRef(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        QUICK_PROMPTS_STORAGE_KEY,
-        JSON.stringify(quickPrompts),
-      );
-    } catch {
-      // 快捷输入仅作为本地便利功能，写入失败时保留内存态即可，避免影响聊天主流程。
-    }
-  }, [quickPrompts]);
+    if (!settingsLoaded || quickPromptSettingsHydratedRef.current) return;
+    const stateMatchesSettings =
+      areQuickPromptPresetsEqual(quickPrompts, settings.quickPrompts) &&
+      quickPromptDraft === settings.quickPromptDraft;
 
-  function addQuickPromptPreset() {
+    // 设置数据异步返回前，界面会先用本地初始值渲染；这里等主进程 settings 就绪后再对齐，
+    // 避免第一次真实设置回填时被误判为用户编辑。
+    if (!stateMatchesSettings) {
+      quickPromptHydratingFromSettingsRef.current = true;
+      setQuickPrompts(settings.quickPrompts);
+      setQuickPromptDraft(settings.quickPromptDraft);
+    }
+    quickPromptSettingsHydratedRef.current = true;
+  }, [
+    settingsLoaded,
+    settings.quickPrompts,
+    settings.quickPromptDraft,
+    quickPrompts,
+    quickPromptDraft,
+  ]);
+
+  useEffect(() => {
+    if (!settingsLoaded || !quickPromptSettingsHydratedRef.current) return;
+    const stateMatchesSettings =
+      areQuickPromptPresetsEqual(quickPrompts, settings.quickPrompts) &&
+      quickPromptDraft === settings.quickPromptDraft;
+
+    if (quickPromptHydratingFromSettingsRef.current) {
+      if (stateMatchesSettings) {
+        quickPromptHydratingFromSettingsRef.current = false;
+      }
+      return;
+    }
+    if (stateMatchesSettings) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void updateSettings({ quickPrompts, quickPromptDraft }).catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    settingsLoaded,
+    settings.quickPrompts,
+    settings.quickPromptDraft,
+    quickPrompts,
+    quickPromptDraft,
+    updateSettings,
+  ]);
+
+  const addQuickPromptPreset = useCallback(() => {
     const value = quickPromptDraft.trim();
     if (!value) return;
     setQuickPrompts((current) => {
@@ -75,11 +95,11 @@ export function useQuickPromptPresets() {
       return [{ id: createQuickPromptId(), content: value }, ...current];
     });
     setQuickPromptDraft("");
-  }
+  }, [quickPromptDraft]);
 
-  function removeQuickPromptPreset(id: string) {
+  const removeQuickPromptPreset = useCallback((id: string) => {
     setQuickPrompts((current) => current.filter((item) => item.id !== id));
-  }
+  }, []);
 
   return {
     quickPrompts,

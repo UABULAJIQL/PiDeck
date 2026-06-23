@@ -30,7 +30,6 @@ import {
 	X,
 } from "lucide-react";
 import { t, type TranslationKey } from "../../i18n";
-import type { QuickPromptPreset } from "../../quickPromptTypes";
 import { Button } from "../ui/Button";
 import { CloseIconButton, IconButton } from "../ui/IconButton";
 import { SelectField } from "../ui/SelectField";
@@ -52,6 +51,7 @@ import type {
 	PiCommand,
 	PiInstallStatus,
 	Project,
+	QuickPromptPreset,
 	SessionSummary,
 } from "../../../../shared/types";
 
@@ -292,6 +292,7 @@ export function ComposerToolbar(props: {
 		top: number;
 		left: number;
 		width: number;
+		maxHeight: number;
 	} | null>(null);
 	const quickPromptRef = useRef<HTMLDivElement>(null);
 	const quickPromptTriggerRef = useRef<HTMLButtonElement>(null);
@@ -310,11 +311,45 @@ export function ComposerToolbar(props: {
 		function updateQuickPromptPosition() {
 			const rect = quickPromptTriggerRef.current?.getBoundingClientRect();
 			if (!rect) return;
-			setQuickPromptPosition({
-				top: rect.bottom + 8,
-				left: Math.max(12, Math.min(rect.left, window.innerWidth - 432)),
-				width: Math.min(420, window.innerWidth - 24),
-			});
+			const viewportMargin = 16;
+			const gap = 12;
+			const preferredWidth = 440;
+			const minHeight = 240;
+			const preferredMaxHeight = 520;
+			const width = Math.min(
+				preferredWidth,
+				window.innerWidth - viewportMargin * 2,
+			);
+			const left = Math.max(
+				viewportMargin,
+				Math.min(
+					rect.left,
+					window.innerWidth - viewportMargin - width,
+				),
+			);
+			const availableBelow = window.innerHeight - rect.bottom - gap - viewportMargin;
+			const availableAbove = rect.top - gap - viewportMargin;
+			const shouldOpenAbove =
+				availableBelow < minHeight && availableAbove > availableBelow;
+			const chosenAvailableHeight = Math.max(
+				0,
+				shouldOpenAbove ? availableAbove : availableBelow,
+			);
+			const maxHeight = Math.min(
+				preferredMaxHeight,
+				window.innerHeight - viewportMargin * 2,
+				chosenAvailableHeight || window.innerHeight - viewportMargin * 2,
+			);
+			const top = shouldOpenAbove
+				? Math.max(viewportMargin, rect.top - gap - maxHeight)
+				: Math.max(
+					viewportMargin,
+					Math.min(
+						window.innerHeight - viewportMargin - maxHeight,
+						rect.bottom + gap,
+					),
+				);
+			setQuickPromptPosition({ top, left, width, maxHeight });
 		}
 
 		function handlePointerDown(event: PointerEvent) {
@@ -349,16 +384,25 @@ export function ComposerToolbar(props: {
 				<div
 					className="composer-quick-prompts-popover"
 					ref={quickPromptRef}
+					role="dialog"
+					aria-label={t("composer.quickPrompts")}
 					style={{
 						position: "fixed",
 						top: quickPromptPosition.top,
 						left: quickPromptPosition.left,
 						width: quickPromptPosition.width,
+						maxHeight: quickPromptPosition.maxHeight,
 					}}
 				>
 					<div className="composer-quick-prompts-header">
-						<strong>{t("composer.quickPrompts")}</strong>
-						<p>{t("composer.quickPromptsDesc")}</p>
+						<div>
+							<strong>{t("composer.quickPrompts")}</strong>
+							<p>{t("composer.quickPromptsDesc")}</p>
+						</div>
+						<CloseIconButton
+							label={t("common.close")}
+							onClick={() => setQuickPromptOpen(false)}
+						/>
 					</div>
 					<div className="composer-quick-prompts-list">
 						{props.quickPrompts.length === 0 ? (

@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -59,7 +60,11 @@ import {
 import { shouldResetExpandedDirsForProjectChange } from "./fileTreeExpansion";
 import { syncCollapsedProjects } from "./projectCollapseState";
 import { useMessagePagination } from "./hooks/useMessagePagination";
-import { useQuickPromptPresets } from "./quickPrompts";
+import {
+  useQuickPromptPresets,
+  type QuickPromptSettingsPatch,
+} from "./quickPrompts";
+import { createDefaultQuickPrompts } from "../../shared/quickPrompts";
 import {
   AgentRun,
   AgentContextMenu,
@@ -453,13 +458,7 @@ export function App() {
   const [compacting, setCompacting] = useState(false);
   const [drawer, setDrawer] = useState<DrawerPanel | null>(null);
   const [sessionsProjectId, setSessionsProjectId] = useState<string>();
-  const {
-    quickPrompts,
-    quickPromptDraft,
-    setQuickPromptDraft,
-    addQuickPromptPreset,
-    removeQuickPromptPreset,
-  } = useQuickPromptPresets();
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [sessionHistoryLoading, setSessionHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
@@ -506,6 +505,8 @@ export function App() {
     linkOpenMode: "external",
     maxEditorFileSizeMB: 5,
     providerPrefixes: {} as Record<string, string>,
+    quickPrompts: createDefaultQuickPrompts(),
+    quickPromptDraft: "",
   });
   const [settingsNotice, setSettingsNotice] = useState("");
   const [piProxyNotice, setPiProxyNotice] = useState("");
@@ -515,6 +516,24 @@ export function App() {
   const [piStatus, setPiStatus] = useState<PiInstallStatus | null>(null);
   const [piProxyChecking, setPiProxyChecking] = useState(false);
   const [webServiceChanging, setWebServiceChanging] = useState(false);
+  const persistQuickPromptSettings = useCallback(
+    async (patch: QuickPromptSettingsPatch) => {
+      const saved = await api.settings.update(patch);
+      setSettings(saved);
+    },
+    [],
+  );
+  const {
+    quickPrompts,
+    quickPromptDraft,
+    setQuickPromptDraft,
+    addQuickPromptPreset,
+    removeQuickPromptPreset,
+  } = useQuickPromptPresets({
+    settings,
+    settingsLoaded,
+    updateSettings: persistQuickPromptSettings,
+  });
   const [appInfo, setAppInfo] = useState<AppInfo>({
     version: "-",
     releasesUrl: "https://github.com/ayuayue/pi-desktop/releases",
@@ -858,6 +877,7 @@ export function App() {
       .catch(() => undefined);
     void api.settings.get().then((next) => {
       setSettings(next);
+      setSettingsLoaded(true);
       setCustomPiPath(next.customPiPath ?? "");
       if (!next.piEnvironmentChecked) {
         // 首次检测延后一帧启动,先让主界面完成绘制,避免 packaged app 打开时出现几秒白屏。
