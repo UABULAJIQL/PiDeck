@@ -36,7 +36,6 @@ import { SlashCommandStagePanel } from "./components/app/SlashCommandStagePanel"
 import { TerminalDock } from "./components/terminal/TerminalDock";
 import { CloseIconButton } from "./components/ui/IconButton";
 import { getComposerEnterIntent } from "./composerBehavior";
-import { getVisibleAgentsForProject } from "./agentListDisplay";
 import { resolveLocale, setI18nLocale, t } from "./i18n";
 import {
   formatSidebarRelativeTime,
@@ -60,7 +59,7 @@ import {
 import { shouldResetExpandedDirsForProjectChange } from "./fileTreeExpansion";
 import { syncCollapsedProjects } from "./projectCollapseState";
 import { useMessagePagination } from "./hooks/useMessagePagination";
-import { useSessionLoader } from "./hooks/useSessionLoader";
+import { useQuickPromptPresets } from "./quickPrompts";
 import {
   AgentRun,
   AgentContextMenu,
@@ -103,8 +102,8 @@ import {
   type SessionModifiedFile,
 } from "./components/app/AppParts";
 import { FileDiffViewer } from "./components/app/FileDiffViewer";
+import { partitionSessionsForDisplay, sortSessionsForDisplay } from "../../shared/sessionDisplay";
 import {
-  compareSessionsForDisplay,
   type AgentRuntimeState,
   type AgentServerRequest,
   type AgentTab,
@@ -243,6 +242,10 @@ function migrateAgentRecord<T>(
   return next;
 }
 
+function getSessionAlertKey(projectId: string, filePath: string) {
+  return `${projectId}::${normalizeSessionPathForCompare(filePath) ?? filePath}`;
+}
+
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [draggingProjectId, setDraggingProjectId] = useState<string>();
@@ -256,13 +259,6 @@ export function App() {
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(
     new Set(),
   );
-  /**
-   * "更多 Agent"只是左侧目录树的展示状态:不停止、不隐藏后端 agent,
-   * 也不跨项目互相影响,避免项目多开时列表默认过长。
-   */
-  const [expandedAgentProjects, setExpandedAgentProjects] = useState<
-    Set<string>
-  >(new Set());
   const [activeAgentByProject, setActiveAgentByProject] = useState<
     Record<string, string>
   >({});
@@ -279,6 +275,9 @@ export function App() {
   const [sessionsByProject, setSessionsByProject] = useState<
     Record<string, SessionSummary[]>
   >({});
+  const [completedSessionAlerts, setCompletedSessionAlerts] = useState<
+    Set<string>
+  >(() => new Set());
   const [sessionLoadingByProject, setSessionLoadingByProject] = useState<
     Record<string, boolean>
   >({});
@@ -338,6 +337,7 @@ export function App() {
   >({});
   const finalizedTurnByAgentRef = useRef<Record<string, string | null>>({});
   const agentStatusByAgentRef = useRef<Record<string, AgentTab["status"]>>({});
+  const completedAlertBusyByAgentRef = useRef<Record<string, boolean>>({});
   /** RPC 日志,用于调试 */
   const [rpcLogs, setRpcLogs] = useState<
     Array<{
@@ -453,6 +453,13 @@ export function App() {
   const [compacting, setCompacting] = useState(false);
   const [drawer, setDrawer] = useState<DrawerPanel | null>(null);
   const [sessionsProjectId, setSessionsProjectId] = useState<string>();
+  const {
+    quickPrompts,
+    quickPromptDraft,
+    setQuickPromptDraft,
+    addQuickPromptPreset,
+    removeQuickPromptPreset,
+  } = useQuickPromptPresets();
   const [sessionHistoryLoading, setSessionHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
@@ -620,6 +627,33 @@ export function App() {
         [activeAgentId]: nextValue,
       };
     });
+  }
+
+  function focusComposerTextarea() {
+    requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+    });
+  }
+
+  function appendQuickPromptToComposer(content: string) {
+    if (!activeAgentIdRef.current) return;
+    setPrompt((current) => {
+      const trimmedCurrent = current.trimEnd();
+      if (!trimmedCurrent) return content;
+      const separator = /\n\n$/.test(current)
+        ? ""
+        : /\n$/.test(current)
+          ? "\n"
+          : "\n\n";
+      return `${current}${separator}${content}`;
+    });
+    setSuggestionsOpen(false);
+    focusComposerTextarea();
+  }
+
+  function handleAddQuickPromptPreset() {
+    addQuickPromptPreset();
+    focusComposerTextarea();
   }
   const terminalDockState = activeAgentId
     ? terminalDockStateByAgent[activeAgentId]
@@ -1420,6 +1454,66 @@ export function App() {
     }
   }, [displayAgents, activeAgentId, modifiedFiles, messagesByAgent]);
 
+  useEffect(() => {
+    const nextBusyByAgent: Record<string, boolean> = {};
+    const liveSessionKeys = new Set<string>();
+    const alertKeysToAdd = new Set<string>();
+
+    for (const agent of displayAgents) {
+      const runtimeState = runtimeStateByAgent[agent.id];
+      const isBusy = Boolean(
+        agent.status === "starting" ||
+        agent.status === "running" ||
+        runtimeState?.isStreaming ||
+        runtimeState?.isCompacting,
+      );
+      nextBusyByAgent[agent.id] = isBusy;
+
+      if (agent.projectId && agent.sessionPath) {
+        const alertKey = getSessionAlertKey(agent.projectId, agent.sessionPath);
+        liveSessionKeys.add(alertKey);
+        const previousBusy = completedAlertBusyByAgentRef.current[agent.id];
+        // 仅在同一个会话真实经历过忙碌态后落回空闲态时打点，
+        // 避免首次载入已有 idle agent 或主进程状态时序抖动时误报绿色提醒。
+        if (previousBusy === true && !isBusy && agent.id !== activeAgentIdRef.current) {
+          alertKeysToAdd.add(alertKey);
+        }
+      }
+    }
+
+    completedAlertBusyByAgentRef.current = nextBusyByAgent;
+    setCompletedSessionAlerts((current) => {
+      const next = new Set(current);
+      let changed = false;
+      for (const key of alertKeysToAdd) {
+        if (!next.has(key)) {
+          next.add(key);
+          changed = true;
+        }
+      }
+      for (const key of [...next]) {
+        if (!liveSessionKeys.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [displayAgents, runtimeStateByAgent]);
+
+  useEffect(() => {
+    const activeProjectId = activeAgent?.projectId;
+    const activeSessionPath = activeAgent?.sessionPath;
+    if (!activeProjectId || !activeSessionPath) return;
+    setCompletedSessionAlerts((current) => {
+      const key = getSessionAlertKey(activeProjectId, activeSessionPath);
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+  }, [activeAgent?.projectId, activeAgent?.sessionPath]);
+
   // 检测 goal_complete tool call → 标记 goal 完成
   useEffect(() => {
     if (goalStatusRef.current !== "active") return;
@@ -1783,7 +1877,7 @@ export function App() {
 
   async function refreshSessions(projectId = activeProjectId) {
     const next = await api.sessions.list(projectId);
-    setSessions([...next].sort(compareSessionsForDisplay));
+    setSessions(sortSessionsForDisplay(next));
   }
 
   async function refreshProjectSessions(projectId: string) {
@@ -1793,7 +1887,7 @@ export function App() {
     }));
     try {
       const next = await api.sessions.list(projectId);
-      const sorted = [...next].sort(compareSessionsForDisplay);
+      const sorted = sortSessionsForDisplay(next);
       setSessionsByProject((current) => ({
         ...current,
         [projectId]: sorted,
@@ -2016,6 +2110,13 @@ export function App() {
     session: SessionSummary,
   ) {
     setSessionMenu(null);
+    setCompletedSessionAlerts((current) => {
+      const key = getSessionAlertKey(projectId, session.filePath);
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
     return createAgent(
       projectId,
       session.filePath,
@@ -3754,56 +3855,75 @@ ${goalTextRef.current}
             );
             const projectSessions = sessionsByProject[project.id] ?? [];
             const projectSearch = search.trim();
-            const activeSessionSummary =
-              activeAgent?.projectId === project.id && activeAgent.sessionPath
-                ? projectSessions.find((session) =>
-                    isSameSessionPath(activeAgent.sessionPath, session.filePath),
-                  )
-                : undefined;
-            // 当当前激活会话已经有对应的历史 session 时，要把它放回下面的 session 区域，
-            // 否则它会继续占据上方 Agent 区的位置，视觉上永远压在置顶会话之上。
-            const projectAgentsForList = activeSessionSummary
-              ? projectAgents.filter((agent) => agent.id !== activeAgentId)
-              : projectAgents;
-            // 过滤掉仍然以 Agent 形式展示的历史会话，避免重复显示；
-            // 当前激活会话若已切回下方 session 区，则这里必须保留它参与分区排序。
-            const activeAgentSessionPaths = new Set(
-              projectAgentsForList
-                .filter((agent) => agent.sessionPath)
-                .map((agent) => agent.sessionPath),
+            const projectSessionAgents = projectAgents.filter(
+              (agent) => agent.sessionPath,
             );
-            // 左侧项目树会在渲染前再次排序；这里必须复用置顶优先级，
-            // 否则即使主进程已经把 session 标记为 pinned，也会被这层时间排序重新压回中间位置。
+            const projectAgentsForList = projectAgents.filter(
+              (agent) => !agent.sessionPath,
+            );
+            const sessionAgentPaths = new Set(
+              projectSessionAgents
+                .map((agent) => agent.sessionPath)
+                .filter((path): path is string => Boolean(path)),
+            );
+            const sessionMatchesSearch = (session: SessionSummary) =>
+              !projectSearch ||
+              matches(
+                `${session.name ?? ""}${session.preview}${session.filePath}`,
+                projectSearch,
+              );
+            const projectAgentSessionSummaries = projectSessionAgents
+              .map((agent) => {
+                const matchedSession = projectSessions.find((session) =>
+                  isSameSessionPath(agent.sessionPath, session.filePath),
+                );
+                const sessionSummary: SessionSummary = matchedSession
+                  ? {
+                      ...matchedSession,
+                      name: agent.title || matchedSession.name,
+                    }
+                  : {
+                      id: agent.id,
+                      filePath: agent.sessionPath!,
+                      projectPath: agent.cwd,
+                      name: agent.title,
+                      preview: "",
+                      updatedAt: agent.createdAt || Date.now(),
+                      messageCount: 0,
+                      pinned: false,
+                    };
+                return sessionMatchesSearch(sessionSummary)
+                  ? sessionSummary
+                  : undefined;
+              })
+              .filter((session): session is SessionSummary => Boolean(session));
             const visibleProjectSessions = [
-              ...(projectSearch
-                ? projectSessions.filter((session) =>
-                    matches(
-                      `${session.name ?? ""}${session.preview}${session.filePath}`,
-                      projectSearch,
-                    ),
-                  )
-                : projectSessions),
-            ]
-              .filter(
-                (session) => !activeAgentSessionPaths.has(session.filePath),
-              )
-              .sort(compareSessionsForDisplay);
+              ...projectSessions.filter(
+                (session) =>
+                  !sessionAgentPaths.has(session.filePath) &&
+                  sessionMatchesSearch(session),
+              ),
+              ...projectAgentSessionSummaries,
+            ];
             const isActiveSidebarSession = (session: SessionSummary) =>
               activeAgent?.projectId === project.id &&
               isSameSessionPath(activeAgent.sessionPath, session.filePath);
-            const prioritizeActiveSession = (sessions: SessionSummary[]) => {
-              const activeSession = sessions.find(isActiveSidebarSession);
-              if (!activeSession) return sessions;
+            const prioritizeActiveSession = (sectionSessions: SessionSummary[]) => {
+              const activeSession = sectionSessions.find(isActiveSidebarSession);
+              if (!activeSession) return sectionSessions;
               return [
                 activeSession,
-                ...sessions.filter((session) => session !== activeSession),
+                ...sectionSessions.filter((session) => session !== activeSession),
               ];
             };
+            const partitionedProjectSessions = partitionSessionsForDisplay(
+              visibleProjectSessions,
+            );
             const pinnedProjectSessions = prioritizeActiveSession(
-              visibleProjectSessions.filter((session) => session.pinned),
+              partitionedProjectSessions.pinned,
             );
             const normalProjectSessions = prioritizeActiveSession(
-              visibleProjectSessions.filter((session) => !session.pinned),
+              partitionedProjectSessions.normal,
             );
             const projectSessionsLoaded = Object.prototype.hasOwnProperty.call(
               sessionsByProject,
@@ -3817,48 +3937,93 @@ ${goalTextRef.current}
               visibleProjectSessions.length > 0 ||
               projectSessionsLoading;
             const isCollapsed = collapsedProjects.has(project.id);
-            const agentDisplay = getVisibleAgentsForProject(
-              projectAgentsForList,
-              expandedAgentProjects.has(project.id),
-            );
-            const renderProjectSessionButton = (session: SessionSummary) => (
-              <button
-                key={session.filePath}
-                className={
-                  isActiveSidebarSession(session)
-                    ? "conversation agent-row session-row active"
-                    : "conversation agent-row session-row"
-                }
-                title={session.filePath}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setSessionMenu({
-                    x: event.clientX,
-                    y: event.clientY,
-                    projectId: project.id,
-                    session,
-                  });
-                }}
-                onClick={() => void openSidebarSession(project.id, session)}
-              >
-                <span className="session-node-marker" aria-hidden="true" />
-                <div className="conversation-body">
-                  <div className="conversation-title">
-                    <strong>{session.name || t("common.untitled")}</strong>
-                    <time
-                      className="session-relative-time"
-                      dateTime={new Date(session.updatedAt).toISOString()}
-                      title={new Date(session.updatedAt).toLocaleString()}
-                    >
-                      {formatSidebarRelativeTime(
-                        session.updatedAt,
-                        relativeTimeNow,
+            const findSessionAgent = (filePath: string) =>
+              projectSessionAgents.find((agent) =>
+                isSameSessionPath(agent.sessionPath, filePath),
+              );
+            const renderProjectSessionButton = (session: SessionSummary) => {
+              const sessionAgent = findSessionAgent(session.filePath);
+              const isActiveSession = isActiveSidebarSession(session);
+              const sessionStatus = sessionAgent?.status;
+              const showCloseAction = Boolean(sessionAgent) && !isPendingAgentId(sessionAgent?.id);
+              const hasCompletionAlert =
+                !isActiveSession &&
+                completedSessionAlerts.has(
+                  getSessionAlertKey(project.id, session.filePath),
+                );
+              return (
+                <button
+                  key={session.filePath}
+                  className={
+                    isActiveSession
+                      ? "conversation agent-row session-row active"
+                      : "conversation agent-row session-row"
+                  }
+                  title={session.filePath}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setSessionMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      projectId: project.id,
+                      session,
+                    });
+                  }}
+                  onClick={() => void openSidebarSession(project.id, session)}
+                >
+                  <span className="session-node-marker" aria-hidden="true" />
+                  <div className="conversation-body">
+                    <div className="conversation-title">
+                      {hasCompletionAlert && (
+                        <span
+                          className="session-completion-dot"
+                          title={t("app.statusIdle") || "idle"}
+                          aria-hidden="true"
+                        >
+                          ●
+                        </span>
                       )}
-                    </time>
+                      <strong>{session.name || t("common.untitled")}</strong>
+                      {sessionStatus ? (
+                        <span
+                          className={`session-relative-time agent-status-indicator status-${sessionStatus}`}
+                        >
+                          {sessionStatus === "running" && "●"}
+                          {sessionStatus === "idle" && "○"}
+                          {sessionStatus === "starting" && "◐"}{" "}
+                          {t(
+                            `app.status${sessionStatus.charAt(0).toUpperCase() + sessionStatus.slice(1)}` as any,
+                          ) || sessionStatus}
+                        </span>
+                      ) : !isActiveSession ? (
+                        <time
+                          className="session-relative-time"
+                          dateTime={new Date(session.updatedAt).toISOString()}
+                          title={new Date(session.updatedAt).toLocaleString()}
+                        >
+                          {formatSidebarRelativeTime(
+                            session.updatedAt,
+                            relativeTimeNow,
+                          )}
+                        </time>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
+                  {showCloseAction && sessionAgent ? (
+                    <span
+                      className="agent-row-action agent-delete"
+                      title={t("menu.closeAgent")}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void closeAgent(sessionAgent.id);
+                      }}
+                    >
+                      <X size={14} />
+                    </span>
+                  ) : null}
+                </button>
+              );
+            };
             const isDraggingProject = draggingProjectId === project.id;
             const isProjectDropTarget = dragOverProjectId === project.id;
             const projectRowClass = [
@@ -3960,7 +4125,7 @@ ${goalTextRef.current}
                 </button>
                 {!isCollapsed && (
                   <div className="project-children-scroll">
-                    {agentDisplay.visibleAgents.map((agent) => {
+                    {projectAgentsForList.map((agent) => {
                       const isActiveAgent = agent.id === activeAgentId;
                       return (
                         <button
@@ -4016,23 +4181,6 @@ ${goalTextRef.current}
                         </button>
                       );
                     })}
-                    {agentDisplay.hasHiddenAgents && (
-                      <button
-                        className="agent-more-row"
-                        onClick={() => {
-                          setExpandedAgentProjects((prev) => {
-                            const next = new Set(prev);
-                            next.add(project.id);
-                            return next;
-                          });
-                        }}
-                      >
-                        <span className="agent-more-branch" />
-                        <span>
-                          {t("app.moreAgents", { count: agentDisplay.hiddenCount })}
-                        </span>
-                      </button>
-                    )}
                     {(pinnedProjectSessions.length > 0 ||
                       normalProjectSessions.length > 0) && (
                       <div className="project-session-list">
@@ -4383,6 +4531,13 @@ ${goalTextRef.current}
               state={activeRuntimeState}
               compacting={compacting}
               disabled={isAgentBusy || composerDisabled}
+              quickPrompts={quickPrompts}
+              quickPromptDraft={quickPromptDraft}
+              quickPromptDisabled={!activeAgentId}
+              onQuickPromptDraftChange={setQuickPromptDraft}
+              onAddQuickPrompt={handleAddQuickPromptPreset}
+              onUseQuickPrompt={appendQuickPromptToComposer}
+              onRemoveQuickPrompt={removeQuickPromptPreset}
               onPickModel={openModelPicker}
               onPickThinking={() => setThinkingPickerOpen(true)}
               onCompact={compactAgent}

@@ -598,7 +598,7 @@ function registerIpc() {
 		async (_event, projectId?: string) => {
 			const project = projectId ? projectStore.get(projectId) : undefined;
 			const sessions = await sessionScanner.list(project?.path);
-			return projectId ? sessionPinStore.decorate(projectId, sessions) : sessions;
+			return projectId ? await sessionPinStore.decorate(projectId, sessions) : sessions;
 		},
 	);
 	ipcMain.handle(

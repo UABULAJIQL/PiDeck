@@ -1199,7 +1199,9 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 		opacity 0.12s ease;
 }
 .agent-row:hover .agent-row-action,
-.agent-row.active .agent-row-action {
+.agent-row.active .agent-row-action,
+.agent-row:focus-visible .agent-row-action,
+.agent-row:focus-within .agent-row-action {
 	opacity: 0.8;
 }
 .agent-row-action:hover {
@@ -1264,7 +1266,9 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	opacity: 0.95;
 }
 .session-row {
-	grid-template-columns: minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: 2px;
 	min-height: 28px;
 	margin: 2px 0 0 8px;
 	padding: 4px 6px 4px 28px;
@@ -1296,6 +1300,14 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	font-size: var(--font-size-caption);
 	line-height: var(--line-height-caption);
 	white-space: nowrap;
+}
+
+.session-completion-dot {
+	flex: 0 0 auto;
+	margin-right: 4px;
+	color: var(--color-success);
+	font-size: 10px;
+	line-height: 1;
 }
 .session-node-marker {
 	display: none;
@@ -4059,6 +4071,14 @@ body.is-composer-resizing .composer-resize-handle::after {
 	flex-direction: column;
 	overflow: hidden;
 }
+.drawer-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	overflow: hidden;
+}
 .drawer-restore {
 	position: fixed;
 	right: 0;
@@ -5599,7 +5619,8 @@ body.is-composer-resizing .composer-resize-handle::after {
 	align-items: center;
 	padding: 6px 8px 0 6px;
 }
-.composer-toolbar button {
+.composer-toolbar > button,
+.composer-toolbar-quick-prompts > button {
 	height: var(--control-height-xs);
 	border: 0;
 	border-radius: var(--radius-xs);
@@ -5608,17 +5629,176 @@ body.is-composer-resizing .composer-resize-handle::after {
 	padding: 0 8px;
 	font-size: var(--font-size-caption);
 }
-.composer-toolbar button:hover {
+.composer-toolbar > button:hover:not(:disabled),
+.composer-toolbar-quick-prompts > button:hover:not(:disabled) {
 	color: var(--color-accent);
 	background: var(--color-bg-active);
 }
-.composer-toolbar button.compacting {
+.composer-toolbar > button.compacting {
 	color: var(--color-warning);
 	background: color-mix(in srgb, var(--color-warning) 16%, var(--color-bg-panel));
 	cursor: wait;
 }
-.composer-toolbar button:disabled.compacting {
+.composer-toolbar > button:disabled.compacting {
 	opacity: 0.7;
+}
+.composer-toolbar-quick-prompts {
+	position: relative;
+}
+.composer-toolbar-quick-prompts > button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.composer-toolbar-quick-prompts > button.active {
+	color: var(--color-accent);
+	background: var(--color-bg-active);
+}
+.composer-quick-prompts-popover {
+	z-index: 130;
+	max-height: min(420px, calc(100vh - 140px));
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-3);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-panel);
+	box-shadow: var(--shadow-popover);
+	overflow: hidden;
+}
+.composer-quick-prompts-header strong {
+	display: block;
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	color: var(--color-text-primary);
+}
+.composer-quick-prompts-header p {
+	margin: var(--space-1) 0 0;
+	font-size: var(--font-size-caption);
+	line-height: var(--line-height-caption);
+	color: var(--color-text-secondary);
+}
+.composer-quick-prompts-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	overflow-y: auto;
+}
+.composer-quick-prompts-list::-webkit-scrollbar {
+	width: 8px;
+}
+.composer-quick-prompts-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+.composer-quick-prompts-list::-webkit-scrollbar-thumb {
+	background: var(--color-border-strong);
+	border-radius: 999px;
+}
+.composer-quick-prompts-empty {
+	padding: var(--space-3);
+	border: 1px dashed var(--color-border-strong);
+	border-radius: var(--radius-md);
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-caption);
+	line-height: var(--line-height-caption);
+	background: var(--color-bg-muted);
+}
+.composer-quick-prompt-item {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: var(--space-2);
+	align-items: start;
+	min-width: 0;
+}
+.composer-quick-prompt-use {
+	width: 100%;
+	min-width: 0;
+	padding: var(--space-3);
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	text-align: left;
+	display: block;
+	color: var(--color-text-primary);
+	transition:
+		border-color 0.12s ease,
+		background 0.12s ease,
+		box-shadow 0.12s ease;
+}
+.composer-quick-prompt-use:hover:not(:disabled) {
+	border-color: var(--color-border-strong);
+	background: var(--color-bg-hover);
+}
+.composer-quick-prompt-use:focus-visible,
+.composer-quick-prompt-remove:focus-visible,
+.composer-quick-prompts-editor button:focus-visible,
+.composer-quick-prompts-editor textarea:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+.composer-quick-prompt-preview {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-size-control);
+	line-height: var(--line-height-control);
+	font-weight: 600;
+	color: var(--color-text-primary);
+}
+.composer-quick-prompt-remove {
+	align-self: stretch;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	color: var(--color-text-tertiary);
+}
+.composer-quick-prompt-remove:hover:not(:disabled) {
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
+	border-color: color-mix(in srgb, var(--color-danger) 28%, var(--color-border-subtle));
+}
+.composer-quick-prompts-editor {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+.composer-quick-prompts-editor textarea {
+	min-height: 88px;
+	max-height: 160px;
+	resize: vertical;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-muted);
+	color: var(--color-text-primary);
+	font-size: var(--font-size-body);
+	line-height: var(--line-height-body);
+}
+.composer-quick-prompts-editor button {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	height: var(--control-height-md);
+	padding: 0 14px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: var(--color-accent);
+	color: var(--color-text-inverse);
+	font-size: var(--font-size-control);
+	font-weight: 600;
+}
+.composer-quick-prompts-editor button:hover:not(:disabled) {
+	background: var(--color-accent-strong);
+}
+.composer-quick-prompts-editor button:disabled {
+	background: var(--color-border-strong);
+	color: var(--color-text-inverse);
 }
 
 /* ---- 输入框命令模式指示 ---- */

@@ -30,6 +30,7 @@ import {
 	X,
 } from "lucide-react";
 import { t, type TranslationKey } from "../../i18n";
+import type { QuickPromptPreset } from "../../quickPromptTypes";
 import { Button } from "../ui/Button";
 import { CloseIconButton, IconButton } from "../ui/IconButton";
 import { SelectField } from "../ui/SelectField";
@@ -275,18 +276,144 @@ export function ComposerToolbar(props: {
 	state?: AgentRuntimeState;
 	compacting: boolean;
 	disabled?: boolean;
+	quickPrompts: QuickPromptPreset[];
+	quickPromptDraft: string;
+	quickPromptDisabled?: boolean;
+	onQuickPromptDraftChange: (value: string) => void;
+	onAddQuickPrompt: () => void;
+	onUseQuickPrompt: (content: string) => void;
+	onRemoveQuickPrompt: (id: string) => void;
 	onPickModel: () => void;
 	onPickThinking: () => void;
 	onCompact: () => void;
 }) {
+	const [quickPromptOpen, setQuickPromptOpen] = useState(false);
+	const [quickPromptPosition, setQuickPromptPosition] = useState<{
+		top: number;
+		left: number;
+		width: number;
+	} | null>(null);
+	const quickPromptRef = useRef<HTMLDivElement>(null);
+	const quickPromptTriggerRef = useRef<HTMLButtonElement>(null);
 	const ctxPercent = props.state?.contextPercent;
 	const showCompact = ctxPercent != null && ctxPercent > 30;
-	// 根据当前 thinkingLevel 查找对应的多语言标签
 	const currentThinkingLevel = props.state?.thinkingLevel;
 	const thinkingLevelLabel = currentThinkingLevel
 		? THINKING_LEVELS.find((level) => level.value === currentThinkingLevel)?.labelKey
 		: undefined;
 	const thinkingDisplay = thinkingLevelLabel ? t(thinkingLevelLabel) : "-";
+	const trimmedDraft = props.quickPromptDraft.trim();
+
+	useEffect(() => {
+		if (!quickPromptOpen) return;
+
+		function updateQuickPromptPosition() {
+			const rect = quickPromptTriggerRef.current?.getBoundingClientRect();
+			if (!rect) return;
+			setQuickPromptPosition({
+				top: rect.bottom + 8,
+				left: Math.max(12, Math.min(rect.left, window.innerWidth - 432)),
+				width: Math.min(420, window.innerWidth - 24),
+			});
+		}
+
+		function handlePointerDown(event: PointerEvent) {
+			const target = event.target as Node;
+			if (
+				!quickPromptRef.current?.contains(target) &&
+				!quickPromptTriggerRef.current?.contains(target)
+			) {
+				setQuickPromptOpen(false);
+			}
+		}
+		function handleEscape(event: KeyboardEvent) {
+			if (event.key === "Escape") setQuickPromptOpen(false);
+		}
+
+		updateQuickPromptPosition();
+		document.addEventListener("pointerdown", handlePointerDown);
+		document.addEventListener("keydown", handleEscape);
+		window.addEventListener("resize", updateQuickPromptPosition);
+		window.addEventListener("scroll", updateQuickPromptPosition, true);
+		return () => {
+			document.removeEventListener("pointerdown", handlePointerDown);
+			document.removeEventListener("keydown", handleEscape);
+			window.removeEventListener("resize", updateQuickPromptPosition);
+			window.removeEventListener("scroll", updateQuickPromptPosition, true);
+		};
+	}, [quickPromptOpen]);
+
+	const quickPromptPopover =
+		quickPromptOpen && quickPromptPosition
+			? createPortal(
+				<div
+					className="composer-quick-prompts-popover"
+					ref={quickPromptRef}
+					style={{
+						position: "fixed",
+						top: quickPromptPosition.top,
+						left: quickPromptPosition.left,
+						width: quickPromptPosition.width,
+					}}
+				>
+					<div className="composer-quick-prompts-header">
+						<strong>{t("composer.quickPrompts")}</strong>
+						<p>{t("composer.quickPromptsDesc")}</p>
+					</div>
+					<div className="composer-quick-prompts-list">
+						{props.quickPrompts.length === 0 ? (
+							<div className="composer-quick-prompts-empty">
+								{t("composer.quickPromptEmpty")}
+							</div>
+						) : (
+							props.quickPrompts.map((item) => (
+								<div key={item.id} className="composer-quick-prompt-item">
+									<button
+										type="button"
+										className="composer-quick-prompt-use"
+										disabled={props.quickPromptDisabled}
+										title={t("composer.quickPromptUse")}
+										onClick={() => {
+											props.onUseQuickPrompt(item.content);
+											setQuickPromptOpen(false);
+										}}
+									>
+										<span className="composer-quick-prompt-preview">
+											{getQuickPromptTitle(item.content)}
+										</span>
+									</button>
+									<IconButton
+										className="composer-quick-prompt-remove"
+										label={t("composer.quickPromptDelete")}
+										onClick={() => props.onRemoveQuickPrompt(item.id)}
+									>
+										<X size={14} strokeWidth={2.2} aria-hidden="true" />
+									</IconButton>
+								</div>
+							))
+						)}
+					</div>
+					<div className="composer-quick-prompts-editor">
+						<textarea
+							value={props.quickPromptDraft}
+							onChange={(event) => props.onQuickPromptDraftChange(event.target.value)}
+							placeholder={t("composer.quickPromptPlaceholder")}
+							rows={4}
+						/>
+						<button
+							type="button"
+							disabled={!trimmedDraft}
+							onClick={props.onAddQuickPrompt}
+						>
+							<Plus size={14} strokeWidth={2.2} aria-hidden="true" />
+							<span>{t("composer.quickPromptAdd")}</span>
+						</button>
+					</div>
+				</div>,
+				document.body,
+			)
+			: null;
+
 	return (
 		<div className="composer-toolbar">
 			<button onClick={props.onPickModel} disabled={props.disabled}>
@@ -295,6 +422,19 @@ export function ComposerToolbar(props: {
 			<button onClick={props.onPickThinking} disabled={props.disabled}>
 				{t("app.think")}: {thinkingDisplay}
 			</button>
+			<div className="composer-toolbar-quick-prompts">
+				<button
+					ref={quickPromptTriggerRef}
+					type="button"
+					disabled={props.disabled}
+					className={quickPromptOpen ? "active" : ""}
+					onClick={() => setQuickPromptOpen((current) => !current)}
+				>
+					{t("composer.quickPrompts")}
+					<ChevronDown size={12} strokeWidth={2.2} aria-hidden="true" />
+				</button>
+				{quickPromptPopover}
+			</div>
 			{showCompact && (
 				<button
 					className={
@@ -2287,37 +2427,48 @@ export function DrawerContent(props: {
 					</button>
 				</div>
 			</div>
-			{props.panel === "files" && (
-				<FilesPanel
-					files={props.files}
-					// 将 Git 变更文件列表转换为 SessionModifiedFile 格式传入 FilesPanel 展示
-					modifiedFiles={props.gitChangedFiles.map((f) => ({
-						path: f.path,
-						toolName: "git",
-						status: "done",
-					}))}
-					expandedDirs={props.expandedDirs}
-					onToggleDirectory={props.onToggleDirectory}
-					onFileContextMenu={props.onFileContextMenu}
-					onRefreshFiles={props.onRefreshFiles}
-					onDiffFile={props.onDiffFile}
-					onOpenFile={props.onOpenFile}
-					onViewFile={props.onViewFile}
-				/>
-			)}
-			{props.panel === "sessions" && (
-				<SessionsPanel
-					sessions={props.sessions}
-					onRefresh={props.onRefreshSessions}
-					onOpen={props.onOpenSession}
-					onRename={props.onRenameSession}
-					onCopy={props.onCopySession}
-					onExport={props.onExportSession}
-					onDelete={props.onDeleteSession}
-				/>
-			)}
+			<div className="drawer-body">
+				{props.panel === "files" && (
+					<FilesPanel
+						files={props.files}
+						// 将 Git 变更文件列表转换为 SessionModifiedFile 格式传入 FilesPanel 展示
+						modifiedFiles={props.gitChangedFiles.map((f) => ({
+							path: f.path,
+							toolName: "git",
+							status: "done",
+						}))}
+						expandedDirs={props.expandedDirs}
+						onToggleDirectory={props.onToggleDirectory}
+						onFileContextMenu={props.onFileContextMenu}
+						onRefreshFiles={props.onRefreshFiles}
+						onDiffFile={props.onDiffFile}
+						onOpenFile={props.onOpenFile}
+						onViewFile={props.onViewFile}
+					/>
+				)}
+				{props.panel === "sessions" && (
+					<SessionsPanel
+						sessions={props.sessions}
+						onRefresh={props.onRefreshSessions}
+						onOpen={props.onOpenSession}
+						onRename={props.onRenameSession}
+						onCopy={props.onCopySession}
+						onExport={props.onExportSession}
+						onDelete={props.onDeleteSession}
+					/>
+				)}
+			</div>
 		</>
 	);
+}
+
+function getQuickPromptTitle(content: string) {
+	const firstLine = content
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.find(Boolean);
+	if (!firstLine) return "…";
+	return firstLine.length > 36 ? `${firstLine.slice(0, 36)}…` : firstLine;
 }
 
 const MODIFIED_FILES_PREVIEW_LIMIT = 5;

@@ -76,15 +76,8 @@ export type SessionSummary = {
 	updatedAt: number;
 	messageCount: number;
 	pinned?: boolean;
+	pinnedAt?: number;
 };
-
-export function compareSessionsForDisplay(left: SessionSummary, right: SessionSummary) {
-	return (
-		Number(Boolean(right.pinned)) - Number(Boolean(left.pinned)) ||
-		right.updatedAt - left.updatedAt ||
-		left.filePath.localeCompare(right.filePath)
-	);
-}
 
 export type CodexImportStatus = "new" | "current" | "outdated";
 

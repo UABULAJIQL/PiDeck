@@ -1,9 +1,14 @@
 import { app } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { compareSessionsForDisplay, type SessionSummary } from "../../shared/types";
+import type { SessionSummary } from "../../shared/types";
+import { sortSessionsForDisplay } from "../../shared/sessionDisplay";
 
-type PinState = Record<string, boolean>;
+type PinEntry = {
+	pinnedAt: number;
+};
+
+type PinState = Record<string, PinEntry>;
 
 export class SessionPinStore {
 	private readonly filePath = join(app.getPath("userData"), "session-pins.json");
@@ -22,13 +27,18 @@ export class SessionPinStore {
 		this.loaded = true;
 	}
 
-	decorate(projectId: string, sessions: SessionSummary[]) {
-		return sessions
-			.map((session) => ({
-				...session,
-				pinned: this.isPinned(projectId, session.filePath),
-			}))
-			.sort(compareSessionsForDisplay);
+	async decorate(projectId: string, sessions: SessionSummary[]) {
+		await this.load();
+		return sortSessionsForDisplay(
+			sessions.map((session) => {
+				const pinEntry = this.getPinEntry(projectId, session.filePath);
+				return {
+					...session,
+					pinned: Boolean(pinEntry),
+					pinnedAt: pinEntry?.pinnedAt,
+				};
+			}),
+		);
 	}
 
 	async toggle(projectId: string, filePath: string) {
@@ -36,7 +46,7 @@ export class SessionPinStore {
 		const key = this.key(projectId, filePath);
 		const nextPinned = !this.state[key];
 		if (nextPinned) {
-			this.state[key] = true;
+			this.state[key] = { pinnedAt: Date.now() };
 		} else {
 			delete this.state[key];
 		}
@@ -58,12 +68,22 @@ export class SessionPinStore {
 	private parseState(value: unknown): PinState {
 		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 		return Object.fromEntries(
-			Object.entries(value).filter(([, pinned]) => pinned === true),
-		) as PinState;
+			Object.entries(value).flatMap(([key, pinValue]) => {
+				if (
+					!pinValue ||
+					typeof pinValue !== "object" ||
+					Array.isArray(pinValue) ||
+					typeof (pinValue as { pinnedAt?: unknown }).pinnedAt !== "number"
+				) {
+					return [];
+				}
+				return [[key, { pinnedAt: (pinValue as { pinnedAt: number }).pinnedAt }] as const];
+			}),
+		);
 	}
 
-	private isPinned(projectId: string, filePath: string) {
-		return Boolean(this.state[this.key(projectId, filePath)]);
+	private getPinEntry(projectId: string, filePath: string) {
+		return this.state[this.key(projectId, filePath)];
 	}
 
 	private key(projectId: string, filePath: string) {
