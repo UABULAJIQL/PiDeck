@@ -392,6 +392,17 @@ function scheduleSaveMainWindowState() {
 	}, WINDOW_STATE_SAVE_DEBOUNCE_MS);
 }
 
+function showMainWindow() {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (mainWindow.isMinimized()) {
+		mainWindow.restore();
+	}
+	if (!mainWindow.isVisible()) {
+		mainWindow.show();
+	}
+	mainWindow.focus();
+}
+
 function createWindow() {
 	const windowOptions = settingsStore.createWindowOptions();
 	const savedWindowState = settingsStore.get().windowState;
@@ -1112,101 +1123,110 @@ function sendTelemetryHeartbeat() {
 	void telemetry.sendHeartbeat().catch(() => undefined);
 }
 
-app.whenReady().then(async () => {
-	projectStore = new ProjectStore();
-	fileSystemService = new FileSystemService();
-	sessionScanner = new SessionScanner();
-	remarkStore = new RemarkStore();
-	sessionPinStore = new SessionPinStore();
-	codexSessionImporter = new CodexSessionImporter();
-	claudeSessionImporter = new ClaudeSessionImporter();
-	settingsStore = new SettingsStore();
-	quickPromptStore = new QuickPromptStore();
-	gitService = new GitService();
-	piLocator = new PiLocator();
-	configManager = new ConfigManager();
-	skillManager = new SkillManager();
-	extensionManager = new ExtensionManager(
-		piLocator,
-		() => settingsStore.get(),
-		async (projectPath?: string) =>
-			projectPath
-				? (await configManager.getProjectSettingsConfig(projectPath)).parsed
-				: (await configManager.getSettingsConfig()).parsed,
-		async (settings, projectPath?: string) => {
-			if (projectPath) {
-				await configManager.saveProjectSettingsConfig(projectPath, settings);
-				return;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+	app.quit();
+} else {
+	app.on("second-instance", () => {
+		showMainWindow();
+	});
+
+	app.whenReady().then(async () => {
+		projectStore = new ProjectStore();
+		fileSystemService = new FileSystemService();
+		sessionScanner = new SessionScanner();
+		remarkStore = new RemarkStore();
+		sessionPinStore = new SessionPinStore();
+		codexSessionImporter = new CodexSessionImporter();
+		claudeSessionImporter = new ClaudeSessionImporter();
+		settingsStore = new SettingsStore();
+		quickPromptStore = new QuickPromptStore();
+		gitService = new GitService();
+		piLocator = new PiLocator();
+		configManager = new ConfigManager();
+		skillManager = new SkillManager();
+		extensionManager = new ExtensionManager(
+			piLocator,
+			() => settingsStore.get(),
+			async (projectPath?: string) =>
+				projectPath
+					? (await configManager.getProjectSettingsConfig(projectPath)).parsed
+					: (await configManager.getSettingsConfig()).parsed,
+			async (settings, projectPath?: string) => {
+				if (projectPath) {
+					await configManager.saveProjectSettingsConfig(projectPath, settings);
+					return;
+				}
+				await configManager.saveSettingsConfig(settings);
+			},
+		);
+		piUpdateChecker = new PiUpdateChecker(
+			piLocator,
+			extensionManager,
+			() => settingsStore.get(),
+		);
+		agentManager = new AgentManager(
+			(id) => projectStore.get(id),
+			() => mainWindow,
+			settingsStore,
+		);
+		webServiceManager = new WebServiceManager({
+			listProjects: () => projectStore.list(),
+			listAgents: () => agentManager.list(),
+			listSessions: (projectId) => {
+				const project = projectStore.get(projectId);
+				return sessionScanner.list(project?.path);
+			},
+			getMessages: (agentId) => agentManager.getMessages(agentId),
+			createAgent: (input) => agentManager.create(input),
+			sendPrompt: (input) => agentManager.sendPrompt(input),
+			stopAgent: (agentId) => agentManager.stop(agentId),
+			runtimeState: (agentId) => agentManager.getRuntimeState(agentId),
+			cycleModel: (agentId) => agentManager.cycleModel(agentId),
+			availableModels: (agentId) => agentManager.getAvailableModels(agentId),
+			setModel: (agentId, provider, modelId) => agentManager.setModel(agentId, provider, modelId),
+			cycleThinking: (agentId) => agentManager.cycleThinking(agentId),
+			setThinking: (agentId, level) => agentManager.setThinking(agentId, level),
+		});
+		terminalManager = new TerminalSessionManager(
+			(agentId) => agentManager.getCwd(agentId),
+			(channel, payload) => mainWindow?.webContents.send(channel, payload),
+		);
+
+		await settingsStore.load();
+		await quickPromptStore.load();
+		await sessionPinStore.load();
+		await remarkStore.load();
+		await applyDesktopProxy(settingsStore.get());
+		await webServiceManager.applySettings(settingsStore.get()).catch((error) => {
+			console.error("Failed to start web service:", error);
+			void settingsStore.update({ webServiceEnabled: false });
+		});
+		registerIpc();
+
+		sendTelemetryHeartbeat();
+		createWindow();
+		setupTray();
+
+		// 项目列表可能位于杀软/同步盘较慢的 userData；窗口先显示，随后异步加载，避免 packaged app 打开时白屏等待。
+		void projectStore
+			.load()
+			.then(() =>
+				mainWindow?.webContents.send("projects:changed", projectStore.list()),
+			)
+			.catch(() => undefined);
+
+		// macOS dock 点击或任务栏点击时恢复窗口
+		app.on("activate", () => {
+			if (mainWindow) {
+				showMainWindow();
+			} else {
+				createWindow();
 			}
-			await configManager.saveSettingsConfig(settings);
-		},
-	);
-	piUpdateChecker = new PiUpdateChecker(
-		piLocator,
-		extensionManager,
-		() => settingsStore.get(),
-	);
-	agentManager = new AgentManager(
-		(id) => projectStore.get(id),
-		() => mainWindow,
-		settingsStore,
-	);
-	webServiceManager = new WebServiceManager({
-		listProjects: () => projectStore.list(),
-		listAgents: () => agentManager.list(),
-		listSessions: (projectId) => {
-			const project = projectStore.get(projectId);
-			return sessionScanner.list(project?.path);
-		},
-		getMessages: (agentId) => agentManager.getMessages(agentId),
-		createAgent: (input) => agentManager.create(input),
-		sendPrompt: (input) => agentManager.sendPrompt(input),
-		stopAgent: (agentId) => agentManager.stop(agentId),
-		runtimeState: (agentId) => agentManager.getRuntimeState(agentId),
-		cycleModel: (agentId) => agentManager.cycleModel(agentId),
-		availableModels: (agentId) => agentManager.getAvailableModels(agentId),
-		setModel: (agentId, provider, modelId) => agentManager.setModel(agentId, provider, modelId),
-		cycleThinking: (agentId) => agentManager.cycleThinking(agentId),
-		setThinking: (agentId, level) => agentManager.setThinking(agentId, level),
+		});
 	});
-	terminalManager = new TerminalSessionManager(
-		(agentId) => agentManager.getCwd(agentId),
-		(channel, payload) => mainWindow?.webContents.send(channel, payload),
-	);
-
-	await settingsStore.load();
-	await quickPromptStore.load();
-	await sessionPinStore.load();
-	await remarkStore.load();
-	await applyDesktopProxy(settingsStore.get());
-	await webServiceManager.applySettings(settingsStore.get()).catch((error) => {
-		console.error("Failed to start web service:", error);
-		void settingsStore.update({ webServiceEnabled: false });
-	});
-	registerIpc();
-
-	sendTelemetryHeartbeat();
-	createWindow();
-	setupTray();
-
-	// 项目列表可能位于杀软/同步盘较慢的 userData；窗口先显示，随后异步加载，避免 packaged app 打开时白屏等待。
-	void projectStore
-		.load()
-		.then(() =>
-			mainWindow?.webContents.send("projects:changed", projectStore.list()),
-		)
-		.catch(() => undefined);
-
-	// macOS dock 点击或任务栏点击时恢复窗口
-	app.on("activate", () => {
-		if (mainWindow) {
-			mainWindow.show();
-			mainWindow.focus();
-		} else {
-			createWindow();
-		}
-	});
-});
+}
 
 app.on("before-quit", () => {
 	isQuitting = true;
