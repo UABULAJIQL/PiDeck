@@ -1,0 +1,78 @@
+.extensions-recommended-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.extensions-recommended-name {
+	font-size: var(--font-size-control);
+	color: var(--color-text-primary);
+	margin-bottom: 2px;
+}
+
+.extensions-recommended-desc {
+	font-size: var(--font-size-caption);
+	color: var(--color-text-secondary);
+	line-height: 1.5;
+	margin-bottom: 4px;
+}
+
+.extensions-recommended-npm {
+	font-size: var(--font-size-micro);
+	color: var(--color-accent);
+	text-decoration: none;
+	word-break: break-all;
+}
+.extensions-recommended-npm:hover {
+	text-decoration: underline;
+}
+
+.extensions-recommended-action {
+	flex-shrink: 0;
+	padding-top: 2px;
+}
+
+/* 推荐与已安装之间的分隔线 */
+.extensions-divider {
+	border: none;
+	border-top: 1px solid var(--color-border-subtle);
+	margin: 24px -8px 20px;
+}
+
+/* 已安装扩展标题 */
+.extensions-installed-title {
+	font-size: var(--font-size-title);
+	font-weight: 700;
+	color: var(--color-text-primary);
+	margin: 0;
+}
+
+.extensions-search-bar {
+	border-bottom: 1px solid var(--color-border-subtle);
+	padding-bottom: var(--space-4);
+	margin-bottom: var(--space-4);
+}
+
+.extensions-search-results {
+	max-height: 400px;
+	overflow-y: auto;
+	margin-top: var(--space-2);
+}
+
+.config-im-openid-empty {
+	color: var(--color-text-tertiary);
+	font-size: var(--font-size-micro);
+}
+
+.config-input-xs {
+	height: var(--control-height-xs) !important;
+	font-size: var(--font-size-micro) !important;
+	padding: 0 var(--space-2) !important;
+}
+
+.config-im-openid-edit {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+

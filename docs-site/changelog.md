@@ -2,8 +2,8 @@
 
 完整更新日志仍维护在仓库根目录：
 
-- [中文 CHANGELOG](https://github.com/ayuayue/PiDeck/blob/main/CHANGELOG.zh-CN.md)
-- [English CHANGELOG](https://github.com/ayuayue/PiDeck/blob/main/CHANGELOG.md)
+- 中文：仓库根目录 `CHANGELOG.zh-CN.md`
+- English: repository root `CHANGELOG.md`
 
 ## v0.6.0
 

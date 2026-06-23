@@ -8,7 +8,6 @@ import type {
 	ImageAssetRef,
 	ImageContent,
 	AppSettings,
-	AppUpdateInfo,
 	AvailableModel,
 	ChatMessage,
 	CodexImportReport,
@@ -18,7 +17,6 @@ import type {
 	ConfigFileDiagnostic,
 	CreateAgentInput,
 	CreatePiSkillInput,
-	FeedbackEnvironment,
 	FileTreeNode,
 	ForkMessage,
 	GitBranchInfo,
@@ -28,7 +26,6 @@ import type {
 	PiProxyTestResult,
 	PiSkillListResult,
 	PiSkillSummary,
-	PiUpdateNoticeInfo,
 	Project,
 	QuickPromptPreset,
 	SendPromptInput,
@@ -168,17 +165,9 @@ const api = {
 				ipcChannels.piCheckCustom,
 				customPath,
 			) as Promise<PiInstallStatus>,
-		checkUpdates: () =>
-			ipcRenderer.invoke(ipcChannels.piCheckUpdates) as Promise<PiUpdateNoticeInfo>,
 	},
 	app: {
 		info: () => ipcRenderer.invoke(ipcChannels.appInfo) as Promise<AppInfo>,
-		checkUpdate: () =>
-			ipcRenderer.invoke(ipcChannels.appCheckUpdate) as Promise<AppUpdateInfo>,
-		feedbackEnvironment: () =>
-			ipcRenderer.invoke(
-				ipcChannels.appFeedbackEnvironment,
-			) as Promise<FeedbackEnvironment>,
 		openExternal: (url: string) =>
 			ipcRenderer.invoke(ipcChannels.appOpenExternal, url) as Promise<void>,
 		restart: () => ipcRenderer.invoke(ipcChannels.appRestart) as Promise<void>,

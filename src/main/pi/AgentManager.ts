@@ -24,6 +24,8 @@ import { BashInputRequestTracker } from "./BashInputRequestTracker";
 import { isInteractiveServerRequest, toAgentServerRequest } from "./serverRequestRouting";
 import type { SettingsStore } from "../settings/SettingsStore";
 import type { ImageAssetStore } from "../images/ImageAssetStore";
+import * as agentMessageConverter from "./AgentMessageConverter";
+import * as agentManagerMessageHelpers from "./AgentManagerMessageHelpers";
 
 export class AgentManager {
 	private readonly agents = new Map<string, AgentRuntime>();
@@ -110,64 +112,19 @@ export class AgentManager {
 	}
 
 	private async repairAssistantUsage(sessionPath: string) {
-		const raw = await readFile(sessionPath, "utf8").catch(() => "");
-		if (!raw) return;
-
-		let changed = false;
-		const lines = raw.split(/\r?\n/).map((line) => {
-			if (!line.trim()) return line;
-			try {
-				const entry = JSON.parse(line) as { message?: Record<string, any> };
-				if (entry.message?.role !== "assistant") return line;
-
-				const usage = entry.message.usage as Record<string, any> | undefined;
-				if (usage?.totalTokens != null && usage.cost?.total != null) return line;
-
-				// Codex 导入的旧会话缺少 assistant.usage；pi 的统计/压缩链路会直接读取 totalTokens，所以打开前补零值兼容。
-				entry.message.usage = this.normalizeUsage(usage);
-				changed = true;
-				return JSON.stringify(entry);
-			} catch {
-				return line;
-			}
-		});
-
-		if (changed) await writeFile(sessionPath, lines.join("\n"), "utf8");
+		return agentMessageConverter.repairAssistantUsage(this, sessionPath);
 	}
 
 	private normalizeUsage(usage: Record<string, any> | undefined) {
-		return {
-			input: usage?.input ?? 0,
-			output: usage?.output ?? 0,
-			cacheRead: usage?.cacheRead ?? 0,
-			cacheWrite: usage?.cacheWrite ?? 0,
-			totalTokens:
-				usage?.totalTokens ??
-				(usage?.input ?? 0) +
-					(usage?.output ?? 0) +
-					(usage?.cacheRead ?? 0) +
-					(usage?.cacheWrite ?? 0),
-			cost: {
-				input: usage?.cost?.input ?? 0,
-				output: usage?.cost?.output ?? 0,
-				cacheRead: usage?.cost?.cacheRead ?? 0,
-				cacheWrite: usage?.cost?.cacheWrite ?? 0,
-				total: usage?.cost?.total ?? 0,
-			},
-		};
+		return agentMessageConverter.normalizeUsage(this, usage);
 	}
 
 	private normalizeSessionPath(sessionPath?: string) {
-		if (!sessionPath) return undefined;
-		const normalized = sessionPath.replace(/\\/g, "/").replace(/\/+$/, "");
-		return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+		return agentMessageConverter.normalizeSessionPath(this, sessionPath);
 	}
 
 	private getCreateDedupKey(input: CreateAgentInput) {
-		const normalizedSessionPath = this.normalizeSessionPath(input.sessionPath);
-		return normalizedSessionPath
-			? `${input.projectId}::session::${normalizedSessionPath}`
-			: `${input.projectId}::new-session`;
+		return agentMessageConverter.getCreateDedupKey(this, input);
 	}
 
 	async create(input: CreateAgentInput) {
@@ -487,90 +444,7 @@ export class AgentManager {
 		command: string,
 		excludeFromContext: boolean,
 	) {
-		this.addMessage(
-			agentId,
-			"user",
-			`${excludeFromContext ? "!!" : "!"}${command}`,
-		);
-		const runtime = this.requireRuntime(agentId);
-		
-		// 检查进程是否还活着
-		if (!runtime.process.isRunning()) {
-			runtime.tab.status = "error";
-			this.addMessage(
-				agentId,
-				"error",
-				"Agent 进程已停止，请重启 Agent 后重试",
-			);
-			this.emitState();
-			return;
-		}
-		
-		runtime.tab.status = "running";
-		this.emitState();
-
-		try {
-			const response = await runtime.process.client.request(
-				{
-					type: "bash",
-					command,
-					excludeFromContext,
-				},
-				60_000,
-			);
-
-			const data = response.data as
-				| {
-						output?: string;
-						exitCode?: number;
-						cancelled?: boolean;
-						truncated?: boolean;
-				  }
-				| undefined;
-
-			const output = data?.output ?? "";
-			const exitCode = data?.exitCode ?? 0;
-			const cancelled = data?.cancelled ?? false;
-
-			if (cancelled) {
-				this.addMessage(agentId, "system", "命令已取消");
-			} else {
-				// 以 tool 消息展示命令输出，与 pi 终端的 bash 结果展示保持一致
-				const toolMessage = formatBashToolMessage({
-					command,
-					output,
-					exitCode,
-					excludeFromContext,
-				});
-				this.addMessage(agentId, "tool", toolMessage.text, toolMessage.meta);
-			}
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			const isProcessDead = errorMessage.includes("pi process is not running") || 
-			                     errorMessage.includes("RPC command timed out");
-			
-			if (isProcessDead) {
-				runtime.tab.status = "error";
-				this.addMessage(
-					agentId,
-					"error",
-					errorMessage.includes("timed out") 
-						? `命令执行超时，Agent 进程可能已停止。请重启 Agent 后重试。`
-						: `Agent 进程已停止，请重启 Agent 后重试。`,
-				);
-			} else {
-				this.addMessage(
-					agentId,
-					"error",
-					`命令执行失败：${errorMessage}`,
-				);
-			}
-		} finally {
-			if (runtime.tab.status !== "error") {
-				runtime.tab.status = "idle";
-			}
-			this.emitState();
-		}
+		return agentManagerMessageHelpers.executeBashCommand(this, agentId, command, excludeFromContext);
 	}
 
 	async abort(agentId: string) {
@@ -926,216 +800,18 @@ export class AgentManager {
 	}
 
 	private handlePiEvent(agentId: string, event: unknown) {
-		// 通知本地监听器
-		for (const listener of this.localEventListeners) {
-			try { listener(agentId, event); } catch {}
-		}
-		this.emit(ipcChannels.agentsEvent, { agentId, event });
-
-		if (!event || typeof event !== "object") return;
-		const typed = event as Record<string, any>;
-		const runtime = this.agents.get(agentId);
-
-		if (typed.type === "agent_start" && runtime) {
-			runtime.tab.status = "running";
-			this.activeAssistantMessageIds.delete(agentId);
-			this.toolMessageIds.delete(agentId);
-			this.emitState();
-		}
-
-		if (typed.type === "message_start" && typed.message?.role === "assistant") {
-			this.beginAssistantMessage(agentId);
-			this.upsertAssistantMessage(agentId, typed.message);
-		}
-
-		if (typed.type === "auto_retry_start") {
-			this.upsertRetryStatusMessage(agentId, typed, "running");
-			if (runtime) {
-				// pi 在等待指数退避期间可能短暂结束一轮 agent run；桌面端保持 running，
-				// 让用户明确知道当前不是最终失败，而是在等待下一次自动重试。
-				runtime.tab.status = "running";
-				this.emitState();
-			}
-		}
-
-		if (typed.type === "auto_retry_end") {
-			this.upsertRetryStatusMessage(
-				agentId,
-				typed,
-				typed.success ? "success" : "error",
-			);
-		}
-
-		if (typed.type === "agent_end") {
-			this.pendingUiSlashCommands.delete(agentId);
-			// 即使 runtime 已被清理（如用户快速切换/停止 agent），仍需向会话写入错误提示，
-			// 否则用户会看到发送后完全空白、没有任何反馈。
-			if (runtime) {
-				runtime.tab.status = "idle";
-				// 清理流式思考状态
-				this.streamingThinking.delete(agentId);
-				this.activeAssistantMessageIds.delete(agentId);
-				this.toolMessageIds.delete(agentId);
-				this.emitThinking(agentId, "");
-			}
-			// agent 异常结束时（如 API 返回 400、模型报错等），将错误提示写入会话，避免用户看到空白。
-			// 错误信息的存放位置因 pi 版本和错误类型不同而有多种可能：
-			//   1. agent_end 顶层 errorMessage
-			//   2. messages 数组中 stopReason=error 的消息的 errorMessage
-			//   3. messages 数组中 assistant 消息的 content 里包含 error 片段
-			//   4. agent_end 顶层 stopReason=error 但无 messages
-			const agentMessages = Array.isArray(typed.messages) ? typed.messages : [];
-			const errorMessages = agentMessages.filter(
-				(m: any) => m.stopReason === "error",
-			);
-			// 逐级查找错误文本：顶层 → 错误消息列表 → 仅检查最后一轮对话中 type=error 的 content 块
-			const topMsg = errorMessages[errorMessages.length - 1];
-			// 只从最后一条 assistant 消息中查找显式 type=error 的 content 块，
-			// 避免扫描全部历史消息导致工具成功输出被误判为错误。
-			const lastAssistant = agentMessages
-				.filter((m: any) => m.role === "assistant")
-				.pop();
-			const contentError = Array.isArray(lastAssistant?.content)
-				? lastAssistant.content.find((c: any) => c?.type === "error")
-				: undefined;
-			const errorMsg =
-				(typed.errorMessage as string | undefined) ??
-				topMsg?.errorMessage ??
-				(typed.error as string | undefined) ??
-				(typeof contentError?.text === "string" ? contentError.text : undefined) ??
-				(typeof contentError?.message === "string"
-					? contentError.message
-					: undefined);
-			if (typed.willRetry === true) {
-				// agent_end.willRetry 表示 pi 已判定本次错误会进入自动重试；
-				// 此时不写入最终错误，避免用户误以为会话已经失败。
-				if (errorMsg && !this.retryStatusMessageIds.has(agentId)) {
-					this.upsertRetryStatusMessage(
-						agentId,
-						{
-							attempt: 0,
-							maxAttempts: 0,
-							delayMs: 0,
-							errorMessage: String(errorMsg),
-						},
-						"running",
-					);
-				}
-			} else if (errorMsg) {
-				this.addDetailedErrorMessage(agentId, String(errorMsg));
-			} else if (
-				typed.stopReason === "error" ||
-				errorMessages.length > 0
-			) {
-				this.addDetailedErrorMessage(agentId, "Agent 返回未知错误，请重试");
-			}
-			if (runtime) this.emitState();
-			// 同步刷新 runtimeState，将 isStreaming 重置为 false；
-			// 否则前端 isAgentBusy 依赖的 isStreaming 仍为过期的 true，导致排队 flush 无法触发。
-			void this.getRuntimeState(agentId)
-				.then((state) => this.emitIdleRuntimeState(agentId, state))
-				.catch(() => this.emitIdleRuntimeState(agentId));
-			// 会话结束时发送系统通知，让用户知道 agent 已完成工作
-			// 只在最后一条消息是 assistant 消息时通知，避免工具调用结束时也触发通知
-			const messages = this.messages.get(agentId) ?? [];
-			const lastMessage = messages[messages.length - 1];
-			if (lastMessage?.role === "assistant" && runtime) {
-				this.notifySessionEnd(runtime.tab.title);
-			}
-		}
-
-		if (
-			typed.type === "message_update" &&
-			typed.assistantMessageEvent
-		) {
-			this.handleAssistantMessageEvent(agentId, typed);
-		}
-
-		if (
-			typed.type === "message_end" &&
-			typed.message?.role === "assistant" &&
-			this.activeAssistantMessageIds.has(agentId)
-		) {
-			this.upsertAssistantMessage(agentId, typed.message);
-			this.activeAssistantMessageIds.delete(agentId);
-		}
-
-		if (typed.type === "tool_execution_start") {
-			this.bashInputRequests.rememberCommand(agentId, typed);
-			this.upsertToolMessage(agentId, typed, "running");
-			// 工具调用开始时确保 agent 状态为 running，保持 thinking bubble 显示
-			if (runtime) {
-				runtime.tab.status = "running";
-				this.emitState();
-			}
-		}
-
-		if (typed.type === "tool_execution_end") {
-			this.bashInputRequests.clearToolCall(agentId, typed.toolCallId);
-			this.upsertToolMessage(
-				agentId,
-				typed,
-				typed.isError ? "error" : "done",
-			);
-			// 工具调用完成后保持 agent 状态为 running，等待后续的 agent_end 事件
-			// 这样在工具完成到 agent 生成回复之间，thinking bubble 仍然会显示
-			if (runtime) {
-				runtime.tab.status = "running";
-				this.emitState();
-			}
-		}
-
-		if (typed.type === "tool_execution_update") {
-			this.bashInputRequests.rememberCommand(agentId, typed);
-			this.bashInputRequests.maybeEmitRequest(agentId, typed);
-			this.upsertToolMessage(agentId, typed, "running");
-		}
-
-		if (typed.type === "extension_error") {
-			this.addMessage(
-				agentId,
-				"error",
-				String(typed.error ?? "Extension error"),
-			);
-		}
+		return agentManagerMessageHelpers.handlePiEvent(this, agentId, event);
 	}
 
 	private emitIdleRuntimeState(agentId: string, state?: AgentRuntimeState) {
-		this.emit(ipcChannels.agentsRuntimeState, {
-			agentId,
-			state: {
-				...(state ?? {}),
-				isStreaming: false,
-				isCompacting: false,
-			},
-		});
+		return agentManagerMessageHelpers.emitIdleRuntimeState(this, agentId, state);
 	}
 
 	private handleServerRequest(
 		agentId: string,
 		request: RpcServerRequest,
 	) {
-		const interactive = isInteractiveServerRequest(request);
-		if (!interactive) {
-			// notify / setStatus / setTitle 这类无响应 UI 事件可能在 agent_end 之后到达；
-			// 它们只更新扩展侧 UI，不代表 Agent 仍在运行，不能把已完成会话重新置为 running。
-			return;
-		}
-		const runtime = this.agents.get(agentId);
-		if (runtime) {
-			runtime.tab.status = "running";
-			this.emitState();
-		}
-		let origin: AgentServerRequest["origin"] | undefined;
-		if (request.type === "extension_ui_request") {
-			const pendingUiSlash = this.pendingUiSlashCommands.get(agentId);
-			if (pendingUiSlash) {
-				pendingUiSlash.sawUiRequest = true;
-				origin = "uiSlashCommand";
-				this.removePendingUiSlashMessage(agentId, pendingUiSlash.command);
-			}
-		}
-		this.trackAndEmitServerRequest(agentId, request, origin);
+		return agentManagerMessageHelpers.handleServerRequest(this, agentId, request);
 	}
 
 	private trackAndEmitServerRequest(
@@ -1143,113 +819,23 @@ export class AgentManager {
 		request: RpcServerRequest,
 		origin?: AgentServerRequest["origin"],
 	) {
-		const requests = this.pendingServerRequests.get(agentId) ?? new Map<string, RpcServerRequest>();
-		requests.set(String(request.id), request);
-		this.pendingServerRequests.set(agentId, requests);
-		const viewRequest = toAgentServerRequest(agentId, request);
-		if (origin) viewRequest.origin = origin;
-		this.emit(ipcChannels.agentsEvent, {
-			agentId,
-			event: {
-				type: "server_request",
-				request: viewRequest,
-			},
-		});
+		return agentManagerMessageHelpers.trackAndEmitServerRequest(this, agentId, request, origin);
 	}
 
 	private removePendingUiSlashMessage(agentId: string, command: string) {
-		const list = this.messages.get(agentId);
-		if (!list) return false;
-		const lastUserIndex = [...list]
-			.map((message, index) => ({ message, index }))
-			.reverse()
-			.find(({ message }) => message.role === "user")?.index;
-		if (lastUserIndex == null) return false;
-		if (list[lastUserIndex]?.text.trim() !== command) return false;
-		const [removed] = list.splice(lastUserIndex, 1);
-		if (!removed) return false;
-		this.messages.set(agentId, list);
-		this.refreshAutoTitle(agentId);
-		this.emitMessagePatch(agentId, { agentId, message: removed, op: "remove" });
-		return true;
+		return agentManagerMessageHelpers.removePendingUiSlashMessage(this, agentId, command);
 	}
 
 	private cancelServerRequest(agentId: string, requestId: string) {
-		const requests = this.pendingServerRequests.get(agentId);
-		const request = requests?.get(requestId);
-		const hadRequest = requests?.delete(requestId) === true;
-		if (request?.type === "extension_ui_request") this.pendingUiSlashCommands.delete(agentId);
-		if (requests?.size === 0) this.pendingServerRequests.delete(agentId);
-		if (hadRequest) {
-			this.emit(ipcChannels.agentsEvent, {
-				agentId,
-				event: {
-					type: "server_request_cancelled",
-					requestId,
-				},
-			});
-		}
+		return agentManagerMessageHelpers.cancelServerRequest(this, agentId, requestId);
 	}
 
 	private handleAssistantMessageEvent(agentId: string, event: Record<string, any>) {
-		const assistantEvent = event.assistantMessageEvent as Record<string, any>;
-		const eventType = assistantEvent.type as string | undefined;
-		const partialMessage =
-			event.message ??
-			assistantEvent.message ??
-			assistantEvent.partial ??
-			assistantEvent.partialMessage;
-
-		if (eventType === "start" || eventType === "message_start") {
-			this.beginAssistantMessage(agentId);
-			this.upsertAssistantMessage(agentId, partialMessage);
-			return;
-		}
-
-		if (eventType === "text_start" || eventType === "text_end") {
-			this.upsertAssistantMessage(agentId, partialMessage);
-			return;
-		}
-
-		if (eventType === "text_delta") {
-			this.upsertAssistantMessage(
-				agentId,
-				partialMessage,
-				String(assistantEvent.delta ?? ""),
-			);
-			return;
-		}
-
-		if (eventType === "thinking_delta") {
-			const prev = this.streamingThinking.get(agentId) ?? "";
-			const delta = String(assistantEvent.delta ?? "");
-			this.streamingThinking.set(agentId, prev + delta);
-			this.emitThinking(agentId, this.stripAnsi(prev + delta));
-			this.upsertAssistantMessage(agentId, partialMessage);
-			return;
-		}
-
-		if (eventType === "thinking_end") {
-			const finalThinking = String(
-				assistantEvent.content ?? this.streamingThinking.get(agentId) ?? "",
-			);
-			if (finalThinking) {
-				this.streamingThinking.set(agentId, finalThinking);
-			}
-			this.upsertAssistantMessage(agentId, partialMessage);
-			return;
-		}
-
-		if (eventType === "message_end" || eventType === "done" || eventType === "error") {
-			this.upsertAssistantMessage(agentId, partialMessage);
-			this.activeAssistantMessageIds.delete(agentId);
-		}
+		return agentManagerMessageHelpers.handleAssistantMessageEvent(this, agentId, event);
 	}
 
 	private beginAssistantMessage(agentId: string) {
-		if (!this.activeAssistantMessageIds.has(agentId)) {
-			this.activeAssistantMessageIds.set(agentId, randomUUID());
-		}
+		return agentManagerMessageHelpers.beginAssistantMessage(this, agentId);
 	}
 
 	private upsertAssistantMessage(
@@ -1257,49 +843,7 @@ export class AgentManager {
 		partialMessage?: unknown,
 		fallbackDelta = "",
 	) {
-		const list = this.messages.get(agentId) ?? [];
-		let messageId = this.activeAssistantMessageIds.get(agentId);
-		if (!messageId) {
-			messageId = randomUUID();
-			this.activeAssistantMessageIds.set(agentId, messageId);
-		}
-
-		const existing = list.find((message) => message.id === messageId);
-		const extractedText =
-			partialMessage && typeof partialMessage === "object"
-				? this.extractText((partialMessage as any).content)
-				: "";
-		const extractedThinking =
-			partialMessage && typeof partialMessage === "object"
-				? this.extractThinking((partialMessage as any).content)
-				: "";
-		const pendingThinking = this.streamingThinking.get(agentId);
-		const nextThinking = this.stripAnsi(extractedThinking || pendingThinking || "");
-
-		if (existing) {
-			existing.text = extractedText || `${existing.text}${fallbackDelta}`;
-			if (nextThinking) existing.thinking = nextThinking;
-			existing.timestamp = Date.now();
-		} else {
-			const text = extractedText || fallbackDelta;
-			if (!text) return;
-			list.push({
-				id: messageId,
-				agentId,
-				role: "assistant",
-				text,
-				timestamp: Date.now(),
-				...(nextThinking ? { thinking: nextThinking } : {}),
-			});
-		}
-
-		if (nextThinking && (extractedText || fallbackDelta)) {
-			this.streamingThinking.delete(agentId);
-			this.emitThinking(agentId, "");
-		}
-
-		this.messages.set(agentId, list);
-		this.emitMessagePatch(agentId, { agentId, message: existing ?? list[list.length - 1]! });
+		return agentManagerMessageHelpers.upsertAssistantMessage(this, agentId, partialMessage, fallbackDelta);
 	}
 
 	private upsertToolMessage(
@@ -1307,99 +851,7 @@ export class AgentManager {
 		event: Record<string, any>,
 		status: "running" | "done" | "error",
 	) {
-		const toolName = event.toolName || "tool";
-		const toolCallId = String(event.toolCallId ?? `${toolName}-${Date.now()}`);
-		let agentTools = this.toolMessageIds.get(agentId);
-		if (!agentTools) {
-			agentTools = new Map<string, string>();
-			this.toolMessageIds.set(agentId, agentTools);
-		}
-
-		let messageId = agentTools.get(toolCallId);
-		if (!messageId) {
-			messageId = randomUUID();
-			agentTools.set(toolCallId, messageId);
-		}
-
-		const list = this.messages.get(agentId) ?? [];
-		const existing = list.find((message) => message.id === messageId);
-		const isError = status === "error" || event.isError === true;
-		const args = event.args ?? existing?.meta?.args;
-
-		// 工具首次开始执行（status === "running"）且 args 携带文件路径时，
-		// 读取文件原始内容以供差异编辑器使用。读取失败（文件不存在等）静默跳过。
-		// 后续 done/error 状态复用已有的 originalContent，避免重复读取。
-		let originalContent: string | undefined = existing?.meta?.originalContent as
-			| string
-			| undefined;
-		if (
-			status === "running" &&
-			!originalContent &&
-			typeof args === "object" &&
-			args !== null
-		) {
-			const filePath =
-				typeof (args as any).filePath === "string"
-					? (args as any).filePath
-					: typeof (args as any).path === "string"
-						? (args as any).path
-						: undefined;
-			if (filePath) {
-				readFile(filePath, "utf8")
-					.then((content) => {
-						originalContent = content;
-						if (existing?.meta) {
-							existing.meta.originalContent = content;
-							this.emitMessagePatch(agentId, { agentId, message: existing });
-						}
-					})
-					.catch(() => {
-						// 文件不存在或被删除，跳过
-					});
-			}
-		}
-		const result =
-			event.result ??
-			event.partialResult ??
-			event.output ??
-			existing?.meta?.result;
-		const detailText = this.formatToolDetail(
-			toolName,
-			args,
-			result,
-			isError,
-		);
-		const icon = status === "running" ? "▶" : isError ? "✗" : "✓";
-		const text =
-			status === "running" ? `${icon} ${toolName}` : `${icon} ${toolName}`;
-		const meta = {
-			status,
-			toolName,
-			toolCallId,
-			args,
-			result,
-			isError,
-			detailText,
-			originalContent,
-		};
-
-		if (existing) {
-			existing.text = text;
-			existing.timestamp = Date.now();
-			existing.meta = meta;
-		} else {
-			list.push({
-				id: messageId,
-				agentId,
-				role: "tool",
-				text,
-				timestamp: Date.now(),
-				meta,
-			});
-		}
-
-		this.messages.set(agentId, list);
-		this.emitMessagePatch(agentId, { agentId, message: existing ?? list[list.length - 1]! });
+		return agentManagerMessageHelpers.upsertToolMessage(this, agentId, event, status);
 	}
 
 	private addMessage(
@@ -1409,69 +861,27 @@ export class AgentManager {
 		meta?: Record<string, unknown>,
 		images?: ImageContent[],
 	) {
-		const list = this.messages.get(agentId) ?? [];
-		const message = {
-			id: randomUUID(),
-			agentId,
-			role,
-			text,
-			timestamp: Date.now(),
-			meta,
-			...(images && images.length > 0 ? { images } : {}),
-		};
-		list.push(message);
-		this.messages.set(agentId, list);
-		if (role === "user" || role === "assistant") this.refreshAutoTitle(agentId);
-		this.emitMessagePatch(agentId, { agentId, message });
+		return agentManagerMessageHelpers.addMessage(this, agentId, role, text, meta, images);
 	}
 
 	private refreshAutoTitle(agentId: string) {
-		const runtime = this.agents.get(agentId);
-		if (!runtime) return false;
-		const project = this.getProject(runtime.tab.projectId);
-		if (!project) return false;
-		if (!this.isDefaultAgentTitle(runtime.tab.title, project)) return false;
-		const nextTitle = this.inferTitleFromMessages(this.messages.get(agentId) ?? []);
-		if (!nextTitle || nextTitle === runtime.tab.title) return false;
-		// Agent 列表标题应和历史会话列表的“摘要名”一致；
-		// 只覆盖默认标题，避免打开/重命名过的历史会话名称被第一条消息反向改掉。
-		runtime.tab.title = nextTitle;
-		this.emitState();
-		return true;
+		return agentManagerMessageHelpers.refreshAutoTitle(this, agentId);
 	}
 
 	private isDefaultAgentTitle(title: string, project: Project) {
-		return (
-			title === `${project.name} agent` ||
-			title === `${project.name} 历史会话` ||
-			title === "历史会话"
-		);
+		return agentManagerMessageHelpers.isDefaultAgentTitle(this, title, project);
 	}
 
 	private inferTitleFromMessages(messages: ChatMessage[]) {
-		const firstUserText = messages.find((message) => message.role === "user")?.text;
-		const firstAssistantText = messages.find(
-			(message) => message.role === "assistant",
-		)?.text;
-		return this.cleanTitle(firstUserText) || this.cleanTitle(firstAssistantText);
+		return agentManagerMessageHelpers.inferTitleFromMessages(this, messages);
 	}
 
 	private cleanTitle(value?: string) {
-		const text = value?.replace(/\s+/g, " ").trim();
-		if (!text || /^untitled$/i.test(text)) return undefined;
-		return text.length > 32 ? `${text.slice(0, 32)}…` : text;
+		return agentManagerMessageHelpers.cleanTitle(this, value);
 	}
 
 	private addDetailedErrorMessage(agentId: string, errorMessage: string) {
-		const retryMessageId = this.retryStatusMessageIds.get(agentId);
-		const retryMessage = retryMessageId
-			? this.messages.get(agentId)?.find((message) => message.id === retryMessageId)
-			: undefined;
-		const attempt = Number(retryMessage?.meta?.attempt ?? 0);
-		const maxAttempts = Number(retryMessage?.meta?.maxAttempts ?? 0);
-		const retryLine = maxAttempts > 0 ? `\n\n已自动重试：${attempt}/${maxAttempts} 次` : "";
-		// 最终失败时把重试次数和原始错误放在同一条错误消息里，便于用户复制给模型/服务商排查。
-		this.addMessage(agentId, "error", `请求失败。${retryLine}\n\n原因：${errorMessage}`);
+		return agentManagerMessageHelpers.addDetailedErrorMessage(this, agentId, errorMessage);
 	}
 
 	private upsertRetryStatusMessage(
@@ -1479,141 +889,18 @@ export class AgentManager {
 		event: Record<string, any>,
 		status: "running" | "success" | "error",
 	) {
-		const list = this.messages.get(agentId) ?? [];
-		let messageId = this.retryStatusMessageIds.get(agentId);
-		let message = messageId ? list.find((item) => item.id === messageId) : undefined;
-		if (!message) {
-			messageId = randomUUID();
-			message = {
-				id: messageId,
-				agentId,
-				role: "system",
-				text: "",
-				timestamp: Date.now(),
-			};
-			list.push(message);
-			this.retryStatusMessageIds.set(agentId, messageId);
-		}
-
-		const attempt = Number(event.attempt ?? message.meta?.attempt ?? 0);
-		const maxAttempts = Number(event.maxAttempts ?? message.meta?.maxAttempts ?? 0);
-		const delayMs = Number(event.delayMs ?? 0);
-		const reason = String(
-			event.errorMessage ?? event.finalError ?? message.meta?.errorMessage ?? "未知错误",
-		);
-		const delayText = delayMs > 0 ? `，${Math.ceil(delayMs / 1000)} 秒后重试` : "";
-		const countText = maxAttempts > 0 ? `${attempt}/${maxAttempts}` : String(attempt || 1);
-
-		if (status === "running") {
-			message.text = `正在自动重试 ${countText}${delayText}\n原因：${reason}`;
-		} else if (status === "success") {
-			message.text = `自动重试成功，共重试 ${attempt} 次`;
-		} else {
-			message.text = `自动重试失败，已重试 ${countText} 次\n原因：${reason}`;
-		}
-		message.timestamp = Date.now();
-		message.meta = { status, attempt, maxAttempts, delayMs, errorMessage: reason };
-
-		this.messages.set(agentId, list);
-		this.emitMessagePatch(agentId, { agentId, message });
+		return agentManagerMessageHelpers.upsertRetryStatusMessage(this, agentId, event, status);
 	}
 
 	private async convertAgentMessages(
 		agentId: string,
 		rawMessages: unknown[],
 	): Promise<ChatMessage[]> {
-		const historicalToolCalls = this.collectHistoricalToolCalls(rawMessages);
-		const groups = await Promise.all(
-			rawMessages.map(async (message, index): Promise<ChatMessage[]> => {
-				if (!message || typeof message !== "object") return [];
-				const typed = message as any;
-				if (typed.role === "user") {
-					const images = await this.extractImages(typed.content);
-					return [
-						{
-							id: `${agentId}-history-${index}`,
-							agentId,
-							role: "user" as const,
-							text:
-								this.extractText(typed.content) ||
-								(images.length > 0 ? "[图片]" : ""),
-							timestamp: typed.timestamp ?? Date.now(),
-							...(images.length > 0 ? { images } : {}),
-						},
-					];
-				}
-				if (typed.role === "assistant") {
-					const thinking = this.extractThinking(typed.content);
-					return [
-						{
-							id: `${agentId}-history-${index}`,
-							agentId,
-							role: "assistant" as const,
-							text: this.extractText(typed.content),
-							timestamp: typed.timestamp ?? Date.now(),
-							...(thinking ? { thinking } : {}),
-						},
-					];
-				}
-				if (typed.role === "toolResult") {
-					const toolCallId = String(typed.toolCallId ?? `history-tool-${index}`);
-					const historicalCall = historicalToolCalls.get(toolCallId);
-					const toolName = String(typed.toolName ?? historicalCall?.name ?? "tool");
-					const isError = Boolean(typed.isError);
-					const result = {
-						content: typed.content,
-						details: typed.details,
-					};
-					const detailText = this.formatToolDetail(
-						toolName,
-						historicalCall?.args,
-						result,
-						isError,
-					);
-					return [
-						{
-							id: `${agentId}-history-${index}`,
-							agentId,
-							role: "tool" as const,
-							text: `${isError ? "✗" : "✓"} ${toolName}`,
-							timestamp: typed.timestamp ?? Date.now(),
-							meta: {
-								status: isError ? "error" : "done",
-								toolName,
-								toolCallId,
-								args: historicalCall?.args,
-								result,
-								isError,
-								detailText,
-							},
-						},
-					];
-				}
-				return [];
-			}),
-		);
-		return groups.flat().filter((message: ChatMessage) => message.text.trim());
+		return agentMessageConverter.convertAgentMessages(this, agentId, rawMessages);
 	}
 
 	private collectHistoricalToolCalls(rawMessages: unknown[]) {
-		const calls = new Map<string, { name: string; args: unknown }>();
-		for (const message of rawMessages) {
-			if (!message || typeof message !== "object") continue;
-			const typed = message as any;
-			if (typed.role !== "assistant" || !Array.isArray(typed.content)) continue;
-			for (const block of typed.content) {
-				if (!block || typeof block !== "object") continue;
-				const toolCall = block as any;
-				if (toolCall.type !== "toolCall" || !toolCall.id) continue;
-				// pi 的历史文件把工具参数保存在 assistant.content 的 toolCall 块中，
-				// toolResult 只带结果；恢复历史详情时必须先建立 toolCallId → 参数映射。
-				calls.set(String(toolCall.id), {
-					name: String(toolCall.name ?? "tool"),
-					args: toolCall.arguments,
-				});
-			}
-		}
-		return calls;
+		return agentMessageConverter.collectHistoricalToolCalls(this, rawMessages);
 	}
 
 	private formatToolDetail(
@@ -1622,116 +909,38 @@ export class AgentManager {
 		result: unknown,
 		isError: boolean,
 	) {
-		const details = this.extractToolDetails(result);
-		const sections = [
-			`工具：${toolName ?? "tool"}`,
-			`状态：${isError ? "失败" : "完成"}`,
-			args ? `参数：\n${this.safeJson(args)}` : "",
-			result
-				? `结果：\n${this.extractToolResultText(result) || this.safeJson(result)}`
-				: "",
-			details ? `详情：\n${this.safeJson(details)}` : "",
-		].filter(Boolean);
-		return sections.join("\n\n");
+		return agentMessageConverter.formatToolDetail(this, toolName, args, result, isError);
 	}
 
 	private extractToolDetails(result: unknown) {
-		if (!result || typeof result !== "object") return undefined;
-		return (result as any).details;
+		return agentMessageConverter.extractToolDetails(this, result);
 	}
 
 
 	private extractToolResultText(result: unknown) {
-		if (!result || typeof result !== "object") return "";
-		const content = (result as any).content;
-		if (!Array.isArray(content)) return "";
-		return content
-			.map((item) => (typeof item?.text === "string" ? item.text : ""))
-			.filter(Boolean)
-			.join("\n");
+		return agentMessageConverter.extractToolResultText(this, result);
 	}
 
 	private safeJson(value: unknown) {
-		try {
-			return JSON.stringify(value, null, 2);
-		} catch {
-			return String(value);
-		}
+		return agentMessageConverter.safeJson(this, value);
 	}
 
 	private extractText(content: unknown): string {
-		if (typeof content === "string") return content;
-		if (Array.isArray(content))
-			return content
-				.map((item) => {
-					if (typeof item === "string") return item;
-					if (item && typeof item === "object") {
-						const typed = item as any;
-						// 跳过 thinking 和 image 类型的内容，只提取实际文本回复
-						if (typed.type === "thinking" || typed.type === "image") return "";
-						return String(typed.text ?? "");
-					}
-					return "";
-				})
-				.filter(Boolean)
-				.join("\n");
-		return "";
+		return agentMessageConverter.extractText(this, content);
 	}
 
 	/** 从 pi 历史消息 content 中恢复图片附件，用于历史会话重新打开后的图片展示。 */
 	private async extractImages(content: unknown): Promise<ImageAssetRef[]> {
-		if (!Array.isArray(content)) return [];
-		const images = await Promise.all(
-			content.map(async (item) => {
-				if (!item || typeof item !== "object") return null;
-				const typed = item as any;
-				if (typed.type !== "image") return null;
-				const data = typeof typed.data === "string" ? typed.data : "";
-				const mimeType =
-					typeof typed.mimeType === "string"
-						? typed.mimeType
-						: typeof typed.mime_type === "string"
-							? typed.mime_type
-							: "image/png";
-				if (!data) return null;
-				const asset = await this.imageAssetStore.createFromBase64({ type: "image", data, mimeType });
-				return {
-					...asset,
-					previewUrl: await this.imageAssetStore.getFileUrl(asset),
-				};
-			}),
-		);
-		const filtered: ImageAssetRef[] = [];
-		for (const image of images) {
-			if (image) filtered.push(image);
-		}
-		return filtered;
+		return agentMessageConverter.extractImages(this, content);
 	}
 
 	private async resolvePromptImages(images?: SendPromptInput["images"]): Promise<ImageContent[] | undefined> {
-		if (!images?.length) return undefined;
-		const resolved = await Promise.all(
-			images.map(async (image) => {
-				if (image.type === "image") return image;
-				return this.imageAssetStore.readAsImageContent(image);
-			}),
-		);
-		return resolved;
+		return agentMessageConverter.resolvePromptImages(this, images);
 	}
 
 	/** 从历史消息 content 数组中提取 thinking 内容块的文本，清理 ANSI 转义码 */
 	private extractThinking(content: unknown): string {
-		if (!Array.isArray(content)) return "";
-		const raw = content
-			.map((item) => {
-				if (!item || typeof item !== "object") return "";
-				const typed = item as any;
-				if (typed.type !== "thinking") return "";
-				return String(typed.thinking ?? typed.text ?? "");
-			})
-			.filter(Boolean)
-			.join("\n");
-		return this.stripAnsi(raw);
+		return agentMessageConverter.extractThinking(this, content);
 	}
 
 	private requireRuntime(agentId: string) {
@@ -1746,27 +955,12 @@ export class AgentManager {
 	 * 通知用户 agent 已完成响应，可以查看结果或继续对话。
 	 */
 	private notifySessionEnd(sessionTitle: string) {
-		try {
-			const settings = this.settingsStore.get();
-			if (!settings.enableNotifications) return;
-			if (!Notification.isSupported()) return;
-
-			// 使用应用名称作为通知标题，在 Windows/macOS 通知中心中显示为应用标识
-			const appName = app.getName();
-			const notification = new Notification({
-				title: appName,
-				body: `${sessionTitle} 已完成响应`,
-				silent: false,
-			});
-			notification.show();
-		} catch {
-			// 通知失败不影响主流程，静默处理
-		}
+		return agentManagerMessageHelpers.notifySessionEnd(this, sessionTitle);
 	}
 
 	/** 清理 ANSI 转义码，模型思考内容中常见终端颜色序列 */
 	private stripAnsi(text: string): string {
-		return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+		return agentMessageConverter.stripAnsi(this, text);
 	}
 
 	private emitThinking(agentId: string, thinking: string) {

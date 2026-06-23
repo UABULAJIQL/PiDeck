@@ -246,22 +246,12 @@ export type AppSettings = {
 	desktopProxyBypass: string;
 	/** 用户手动指定的 pi CLI 命令路径，自动检测不到时用于兜底 */
 	customPiPath: string;
-	/** 是否发送匿名、低频、最小字段的使用统计 */
-	telemetryEnabled: boolean;
 	/** 是否开启局域网 Web 服务 */
 	webServiceEnabled: boolean;
 	/** Web 服务监听地址，默认 0.0.0.0 允许局域网访问 */
 	webServiceHost: string;
 	/** Web 服务监听端口 */
 	webServicePort: number;
-	/** 本地生成的匿名安装标识，不包含账号、路径或机器名 */
-	telemetryInstallId?: string;
-	/** 最近一次发送 app_heartbeat 的本地日期，格式 YYYY-MM-DD */
-	telemetryLastHeartbeatDate?: string;
-	/** 应用安装类型：portable（便携版）或 installed（安装版），启动时自动检测并持久化 */
-	installationType?: "portable" | "installed";
-	/** 用户选择跳过的桌面端版本号；仅忽略这一版的更新提示，新版本仍会继续提醒 */
-	appUpdateSkippedVersion?: string;
 	/** RPC 调用超时时间（毫秒），默认 600000（10 分钟），用于长时间运行的命令 */
 	rpcTimeout: number;
 	/** 外部链接打开方式：external 使用系统默认浏览器，internal 使用应用内独立窗口 */
@@ -353,23 +343,6 @@ export type PiExtensionListResult = {
 	raw: string;
 };
 
-export type PiPackageUpdateInfo = {
-	source: string;
-	displayName: string;
-	currentVersion?: string;
-	latestVersion?: string;
-	scope: PiExtensionSummary["scope"];
-};
-
-export type PiUpdateNoticeInfo = {
-	currentVersion?: string;
-	latestVersion?: string;
-	hasCoreUpdate: boolean;
-	changelogUrl: string;
-	packageUpdates: PiPackageUpdateInfo[];
-	checkedAt: number;
-};
-
 export type PiProxyTestResult = {
 	success: boolean;
 	url: string;
@@ -382,35 +355,6 @@ export type PiProxyTestResult = {
 
 export type AppInfo = {
 	version: string;
-	releasesUrl: string;
-};
-
-export type FeedbackEnvironment = {
-	appVersion: string;
-	platform: NodeJS.Platform;
-	arch: string;
-	electronVersion: string;
-	chromeVersion: string;
-	nodeVersion: string;
-	pi: PiInstallStatus;
-};
-
-export type AppUpdateAsset = {
-	name: string;
-	url: string;
-	size: number;
-};
-
-export type AppUpdateInfo = {
-	currentVersion: string;
-	latestVersion: string;
-	hasUpdate: boolean;
-	releaseName: string;
-	releaseNotes: string;
-	releaseUrl: string;
-	publishedAt?: string;
-	assets: AppUpdateAsset[];
-	recommendedAsset?: AppUpdateAsset;
 };
 
 export type PiRuntimeEvent = {

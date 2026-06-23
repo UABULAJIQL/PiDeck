@@ -6,6 +6,10 @@ All notable changes to PiDeck are documented here.
 
 ## [Unreleased]
 
+### Removed
+
+- Removed issue feedback, in-app update checks, pi update notices, and links to the former upstream project/contact surfaces.
+
 ## v0.6.1 - 2026-06-16
 
 ### 🚀 New Features

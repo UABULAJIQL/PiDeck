@@ -38,7 +38,7 @@ pi --mode rpc
 ## Quick Start
 
 ```bash
-git clone https://github.com/ayuayue/PiDeck.git
+git clone <current-repository-url>
 cd pi-desktop
 npm install
 npm run make-icon

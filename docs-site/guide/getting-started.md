@@ -18,16 +18,14 @@ pi --mode rpc
 
 ## 下载安装
 
-Windows、macOS、Linux 的预构建安装包发布在 GitHub Releases：
-
-[打开 GitHub Releases](https://github.com/ayuayue/PiDeck/releases)
+当前维护版本不再内置更新检测，也不再指向原主项目的固定下载入口。安装包请以当前维护渠道为准；需要本地开发时可直接从源码运行。
 
 安装后首次启动时，PiDeck 会尝试自动检测 `pi` 路径。如果检测失败，可以在设置里手动填写 pi 可执行文件路径。
 
 ## 从源码运行
 
 ```bash
-git clone https://github.com/ayuayue/PiDeck.git
+git clone <当前仓库地址>
 cd pi-desktop
 npm install
 npm run make-icon

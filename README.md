@@ -38,7 +38,7 @@ pi --mode rpc
 ## 快速开始
 
 ```bash
-git clone https://github.com/ayuayue/PiDeck.git
+git clone <当前仓库地址>
 cd pi-desktop
 npm install
 npm run make-icon

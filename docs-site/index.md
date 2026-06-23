@@ -7,14 +7,8 @@ hero:
   tagline: 在一个原生桌面应用里管理项目、会话、配置、终端和工具调用，让本地 pi 编码助手工作流更稳定。
   actions:
     - theme: brand
-      text: 下载最新版本
-      link: https://github.com/ayuayue/PiDeck/releases
-    - theme: alt
       text: 快速开始
       link: /guide/getting-started
-    - theme: alt
-      text: 查看 GitHub
-      link: https://github.com/ayuayue/PiDeck
 
 features:
   - title: 多项目工作区
@@ -28,7 +22,7 @@ features:
   - title: 内嵌终端 Dock
     details: 当前 Agent 绑定独立终端 tab，适合执行命令、观察输出和保持会话上下文。
   - title: 跨平台打包
-    details: Windows、macOS、Linux 预构建包通过 GitHub Releases 发布，源码开发也只需常规 npm 命令。
+    details: 支持从源码构建 Windows、macOS、Linux 安装包，源码开发也只需常规 npm 命令。
 ---
 
 <figure class="home-showcase">
@@ -50,8 +44,8 @@ features:
     聊天、文件、历史、配置、终端和 Git 信息都在同一个桌面布局里。
   </div>
   <div>
-    <strong>一个下载入口</strong>
-    预构建包统一发布到 GitHub Releases，发现新版本后应用内会提示。
+    <strong>一个构建入口</strong>
+    当前维护版本不再内置更新检测，安装包请以当前维护渠道为准；源码构建使用常规 npm 命令。
   </div>
 </div>
 

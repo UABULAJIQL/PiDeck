@@ -17,6 +17,8 @@ import type {
 } from "./config/configTypes";
 import type { AppSettings, ConfigFileDiagnostic, PiExtensionListResult, PiExtensionSummary, PiSkillListResult, PiSkillLocation, PiSkillSummary } from "../../shared/types";
 import { getProviderHeaders } from "./config/providerHeaders";
+import { ConfigModalView } from "./config/ConfigModalView";
+
 
 const api: PiDesktopApi = (window as unknown as { piDesktop: PiDesktopApi })
 	.piDesktop;
@@ -888,280 +890,99 @@ function ConfigModalContent(props: ConfigModalProps) {
 	if (!open) return null;
 
 	return (
-		<div className="modal-backdrop">
-			<div className="config-modal">
-				<div className="modal-header">
-					<strong>{t("config.title")}</strong>
-					<div className="modal-header-actions">
-						{section === "config" && (
-							<>
-								<button className="config-btn primary" onClick={handleExport}>
-									{t("common.export")}
-								</button>
-								<button className="config-btn blue" onClick={handleImport}>
-									{t("common.import")}
-								</button>
-							</>
-						)}
-						<CloseIconButton label={t("common.close")} onClick={onClose} />
-					</div>
-				</div>
-
-				<div className="config-layout">
-					<aside className="config-sidebar" aria-label={t("config.title")}>
-						<div className="config-sidebar-group">
-							<span>{t("config.group.config")}</span>
-							{configNavItems.map((item) => (
-								<button
-									key={item.id}
-									className={
-										section === "config" && tab === item.id ? "active" : ""
-									}
-									onClick={() => {
-										setSection("config");
-										setTab(item.id);
-									}}
-								>
-									{item.label}
-								</button>
-							))}
-						</div>
-						<div className="config-sidebar-group">
-							<span>{t("config.group.agent")}</span>
-							<button
-								className={section === "extensions" ? "active" : ""}
-								onClick={() => setSection("extensions")}
-							>
-								{t("config.nav.extensions")}
-							</button>
-							<button
-								className={section === "skills" ? "active" : ""}
-								onClick={() => setSection("skills")}
-							>
-								{t("config.nav.skills")}
-							</button>
-						</div>
-					</aside>
-
-					<main className="config-main">
-						<div className="config-content">
-					{loading && <div className="config-loading">{t("common.loading")}</div>}
-					{error && <div className="config-error">{error}</div>}
-					{section === "config" && configDiagnostic && (
-						<ConfigDiagnosticCard
-							diagnostic={configDiagnostic}
-							onOpenDocs={() => api.app.openExternal(configDiagnostic.docsUrl)}
-							onOpenRaw={() => setTab("raw")}
-						/>
-					)}
-
-					{section === "config" && !loading && tab === "models" && (
-						<ModelsTab
-							data={modelsData}
-							expandedProvider={expandedProvider}
-							addingProvider={addingProvider}
-							newProviderName={newProviderName}
-							renamingProvider={renamingProvider}
-							renameValue={renameValue}
-							fetchingProvider={fetchingProvider}
-							fetchedModels={fetchedModels}
-							fetchModelsErrorByProvider={fetchModelsErrorByProvider}
-							testingProvider={testingProvider}
-							testResult={testResult}
-							testModelIdByProvider={testModelIdByProvider}
-							saving={saving}
-							onToggleProvider={(name) =>
-								setExpandedProvider(expandedProvider === name ? null : name)
-							}
-							onStartAddProvider={() => {
-								setAddingProvider(true);
-								setNewProviderName("");
-							}}
-							onCancelAddProvider={() => setAddingProvider(false)}
-							onChangeNewProviderName={setNewProviderName}
-							onConfirmAddProvider={handleAddProvider}
-							onStartRename={handleStartRename}
-							onChangeRenameValue={setRenameValue}
-							onConfirmRename={handleConfirmRename}
-							onCancelRename={handleCancelRename}
-							onDeleteProvider={handleDeleteProvider}
-							onDuplicateProvider={handleDuplicateProvider}
-						onDeleteProviders={handleDeleteProviders}
-							onAddModel={handleAddModel}
-							onUpdateModel={handleUpdateModel}
-							onDeleteModel={handleDeleteModel}
-							onFetchModels={handleFetchModels}
-							onTestProvider={handleTestProvider}
-							onChangeTestModelId={(providerName, modelId) =>
-								setTestModelIdByProvider((current) => ({
-									...current,
-									[providerName]: modelId,
-								}))
-							}
-							onClearTestResult={() => setTestResult(null)}
-							onSave={handleSaveModels}
-							onChangeProvider={(name, field, value) => {
-								const provider = modelsData.providers[name];
-								if (!provider) return;
-								setModelsData({
-									...modelsData,
-									providers: {
-										...modelsData.providers,
-										[name]: { ...provider, [field]: value },
-									},
-								});
-							}}
-						/>
-					)}
-
-					{section === "config" && !loading && tab === "auth" && (
-						<AuthTab
-							data={authData}
-							expandedAuth={expandedAuth}
-							addingAuth={addingAuth}
-							newAuthName={newAuthName}
-							saving={saving}
-							onToggleAuth={(name) =>
-								setExpandedAuth(expandedAuth === name ? null : name)
-							}
-							onStartAddAuth={() => {
-								setAddingAuth(true);
-								setNewAuthName("");
-							}}
-							onCancelAddAuth={() => setAddingAuth(false)}
-							onChangeNewAuthName={setNewAuthName}
-							onConfirmAddAuth={handleAddAuth}
-							onDuplicateAuth={handleDuplicateAuth}
-						onDeleteAuths={handleDeleteAuths}
-						onDeleteAuth={handleDeleteAuth}
-							onUpdate={handleUpdateAuth}
-							onSave={handleSaveAuth}
-						/>
-					)}
-
-					{section === "config" && !loading && tab === "settings" && (
-						<SettingsTab
-							data={settingsData}
-							saving={saving}
-							onChange={setSettingsData}
-							onSave={handleSaveSettings}
-						/>
-					)}
-
-
-					{section === "skills" && !loading && (
-						<SkillsTab
-							data={skillsData}
-							loading={loading}
-							creating={creatingSkill}
-							newName={newSkillName}
-							newDescription={newSkillDescription}
-							newLocationId={newSkillLocationId}
-							onRefresh={refreshSkills}
-							onOpenRoot={() => api.skills.openFolder()}
-							onChangeNewName={setNewSkillName}
-							onChangeNewDescription={setNewSkillDescription}
-							onChangeNewLocation={setNewSkillLocationId}
-							onCreate={handleCreateSkill}
-							onToggle={(skill, enabled) => handleToggleSkill(skill.path, enabled)}
-							onDelete={setDeleteSkillConfirm}
-							onOpenFolder={(skill) => api.skills.openFolder(skill.path)}
-							onEditRemark={async (skill, remark) => {
-								await api.skills.editRemark(skill.id, remark);
-								await refreshSkills();
-							}}
-						/>
-					)}
-
-					{section === "extensions" && !loading && (
-						<ExtensionsTab
-							data={extensionsData}
-							loading={loading}
-							projectPath={props.projectPath}
-							togglingSource={togglingExtensionSource}
-							uninstallingSource={uninstallingExtensionSource}
-							onRefresh={refreshExtensions}
-							onToggle={handleToggleExtension}
-							onUninstall={setUninstallExtensionConfirm}
-							onEditRemark={async (extension, remark) => {
-								await api.extensions.editRemark(extension.id, remark);
-								await refreshExtensions();
-							}}
-						/>
-					)}
-
-					{section === "config" && !loading && tab === "raw" && (
-						<RawTab
-							fileName={rawFileName}
-							content={rawContent}
-							saving={saving}
-							onChangeFileName={handleRawFileChange}
-							onChangeContent={setRawContent}
-							onSave={handleSaveRaw}
-						/>
-					)}
-						</div>
-					</main>
-				</div>
-
-				{deleteSkillConfirm && (
-					<div className="session-delete-confirm-backdrop" onClick={() => setDeleteSkillConfirm(null)}>
-						<div className="session-delete-confirm skill-delete-confirm" onClick={(event) => event.stopPropagation()}>
-							<strong>{t("config.deleteSkillConfirmTitle")}</strong>
-							<p>
-								{t("config.deleteSkillConfirmBody", {
-									name: deleteSkillConfirm.name,
-								})}
-							</p>
-							<small>{deleteSkillConfirm.path}</small>
-							<div className="session-delete-confirm-actions">
-								<button onClick={() => setDeleteSkillConfirm(null)}>{t("common.cancel")}</button>
-								<button className="danger" onClick={() => void confirmDeleteSkill()}>
-									{t("common.delete")}
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
-
-				{uninstallExtensionConfirm && (
-					<div className="session-delete-confirm-backdrop" onClick={() => setUninstallExtensionConfirm(null)}>
-						<div className="session-delete-confirm skill-delete-confirm" onClick={(event) => event.stopPropagation()}>
-							<strong>{t("config.uninstallExtensionTitle")}</strong>
-							<p>
-								{t("config.uninstallExtensionBody", {
-									source: uninstallExtensionConfirm.source,
-								})}
-							</p>
-							{uninstallExtensionConfirm.path && <small>{uninstallExtensionConfirm.path}</small>}
-							<div className="session-delete-confirm-actions">
-								<button onClick={() => setUninstallExtensionConfirm(null)}>{t("common.cancel")}</button>
-								<button className="danger" onClick={confirmUninstallExtension}>{t("config.uninstall")}</button>
-							</div>
-						</div>
-					</div>
-				)}
-
-				{toast && <div className="config-toast">{toast}</div>}
-
-				{deleteConfirm && (
-					<div className="config-modal-overlay" onClick={() => setDeleteConfirm(null)}>
-						<div className="config-modal-dialog" onClick={(e) => e.stopPropagation()}>
-							<strong>{deleteConfirm.title}</strong>
-							<p>{deleteConfirm.message}</p>
-							<div className="config-modal-actions">
-								<button className="config-btn danger" onClick={deleteConfirm.onConfirm}>
-									{t("common.delete")}
-								</button>
-								<button className="config-btn" onClick={() => setDeleteConfirm(null)}>
-									{t("common.cancel")}
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
-			</div>
-		</div>
-	);
+	    <ConfigModalView
+	      addingAuth={addingAuth}
+	      addingProvider={addingProvider}
+	      api={api}
+	      authData={authData}
+	      configDiagnostic={configDiagnostic}
+	      ConfigDiagnosticCard={ConfigDiagnosticCard}
+	      configNavItems={configNavItems}
+	      confirmDeleteSkill={confirmDeleteSkill}
+	      confirmUninstallExtension={confirmUninstallExtension}
+	      creatingSkill={creatingSkill}
+	      deleteConfirm={deleteConfirm}
+	      deleteSkillConfirm={deleteSkillConfirm}
+	      error={error}
+	      expandedAuth={expandedAuth}
+	      expandedProvider={expandedProvider}
+	      extensionsData={extensionsData}
+	      fetchedModels={fetchedModels}
+	      fetchingProvider={fetchingProvider}
+	      fetchModelsErrorByProvider={fetchModelsErrorByProvider}
+	      handleAddAuth={handleAddAuth}
+	      handleAddModel={handleAddModel}
+	      handleAddProvider={handleAddProvider}
+	      handleCancelRename={handleCancelRename}
+	      handleConfirmRename={handleConfirmRename}
+	      handleCreateSkill={handleCreateSkill}
+	      handleDeleteAuth={handleDeleteAuth}
+	      handleDeleteAuths={handleDeleteAuths}
+	      handleDeleteModel={handleDeleteModel}
+	      handleDeleteProvider={handleDeleteProvider}
+	      handleDeleteProviders={handleDeleteProviders}
+	      handleDuplicateAuth={handleDuplicateAuth}
+	      handleDuplicateProvider={handleDuplicateProvider}
+	      handleExport={handleExport}
+	      handleFetchModels={handleFetchModels}
+	      handleImport={handleImport}
+	      handleRawFileChange={handleRawFileChange}
+	      handleSaveAuth={handleSaveAuth}
+	      handleSaveModels={handleSaveModels}
+	      handleSaveRaw={handleSaveRaw}
+	      handleSaveSettings={handleSaveSettings}
+	      handleStartRename={handleStartRename}
+	      handleTestProvider={handleTestProvider}
+	      handleToggleExtension={handleToggleExtension}
+	      handleToggleSkill={handleToggleSkill}
+	      handleUpdateAuth={handleUpdateAuth}
+	      handleUpdateModel={handleUpdateModel}
+	      loading={loading}
+	      modelsData={modelsData}
+	      newAuthName={newAuthName}
+	      newProviderName={newProviderName}
+	      newSkillDescription={newSkillDescription}
+	      newSkillLocationId={newSkillLocationId}
+	      newSkillName={newSkillName}
+	      onClose={onClose}
+	      rawContent={rawContent}
+	      rawFileName={rawFileName}
+	      refreshExtensions={refreshExtensions}
+	      refreshSkills={refreshSkills}
+	      renameValue={renameValue}
+	      renamingProvider={renamingProvider}
+	      saving={saving}
+	      section={section}
+	      setAddingAuth={setAddingAuth}
+	      setAddingProvider={setAddingProvider}
+	      setDeleteConfirm={setDeleteConfirm}
+	      setDeleteSkillConfirm={setDeleteSkillConfirm}
+	      setExpandedAuth={setExpandedAuth}
+	      setExpandedProvider={setExpandedProvider}
+	      setModelsData={setModelsData}
+	      setNewAuthName={setNewAuthName}
+	      setNewProviderName={setNewProviderName}
+	      setNewSkillDescription={setNewSkillDescription}
+	      setNewSkillLocationId={setNewSkillLocationId}
+	      setNewSkillName={setNewSkillName}
+	      setRawContent={setRawContent}
+	      setRenameValue={setRenameValue}
+	      setSection={setSection}
+	      setSettingsData={setSettingsData}
+	      setTab={setTab}
+	      setTestModelIdByProvider={setTestModelIdByProvider}
+	      setTestResult={setTestResult}
+	      settingsData={settingsData}
+	      setUninstallExtensionConfirm={setUninstallExtensionConfirm}
+	      skillsData={skillsData}
+	      tab={tab}
+	      testingProvider={testingProvider}
+	      testModelIdByProvider={testModelIdByProvider}
+	      testResult={testResult}
+	      toast={toast}
+	      togglingExtensionSource={togglingExtensionSource}
+	      uninstallExtensionConfirm={uninstallExtensionConfirm}
+	      uninstallingExtensionSource={uninstallingExtensionSource}
+	    />
+	  );
 }
-
