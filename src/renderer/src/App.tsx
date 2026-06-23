@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type PointerEvent,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -246,6 +247,42 @@ function migrateAgentRecord<T>(
 
 function getSessionAlertKey(projectId: string, filePath: string) {
   return `${projectId}::${normalizeSessionPathForCompare(filePath) ?? filePath}`;
+}
+
+function findScrollableAncestor(start: HTMLElement | null) {
+  let current = start;
+  while (current) {
+    const { overflowY } = window.getComputedStyle(current);
+    const canScroll =
+      /(auto|scroll|overlay)/.test(overflowY) &&
+      current.scrollHeight > current.clientHeight;
+    if (canScroll) return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * 左侧项目会话列表使用独立滚动区；当内层已经触顶/触底时，
+ * 把剩余滚轮位移交给外层项目列表，避免多个项目展开时只能卡在单个项目内滚动。
+ */
+function handoffProjectSessionWheel(event: ReactWheelEvent<HTMLDivElement>) {
+  const scrollContainer = event.currentTarget;
+  const maxScrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+  if (maxScrollTop <= 0 || event.deltaY === 0) return;
+  const previousScrollTop = scrollContainer.scrollTop;
+  const nextScrollTop = Math.min(
+    maxScrollTop,
+    Math.max(0, previousScrollTop + event.deltaY),
+  );
+  const consumedDelta = nextScrollTop - previousScrollTop;
+  const remainingDelta = event.deltaY - consumedDelta;
+  if (Math.abs(remainingDelta) < 0.5) return;
+  const outerScrollable = findScrollableAncestor(scrollContainer.parentElement);
+  if (!outerScrollable) return;
+  event.preventDefault();
+  scrollContainer.scrollTop = nextScrollTop;
+  outerScrollable.scrollTop += remainingDelta;
 }
 
 export function App() {
@@ -4197,7 +4234,10 @@ ${goalTextRef.current}
                     })}
                     {(pinnedProjectSessions.length > 0 ||
                       normalProjectSessions.length > 0) && (
-                      <div className="project-session-list">
+                      <div
+                        className="project-session-list"
+                        onWheel={handoffProjectSessionWheel}
+                      >
                         {pinnedProjectSessions.map(renderProjectSessionButton)}
                         {pinnedProjectSessions.length > 0 &&
                           normalProjectSessions.length > 0 && (

@@ -951,9 +951,10 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 }
 
 .conversation-list {
-	/* 只允许垂直滚动，禁止横向滚动条；目录树行更紧凑，留出底部折叠按钮空间。 */
-	display: flex;
-	flex-direction: column;
+	/* 左侧项目列表本身负责外层滚动，但项目组不能再作为 flex 子项参与纵向压缩，
+	 * 否则多个项目同时展开时会互相挤占高度，导致每个展开区都越来越矮。 */
+	display: block;
+	flex: 1 1 auto;
 	min-height: 0;
 	overflow-x: hidden;
 	overflow-y: auto;
@@ -1071,8 +1072,8 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 .project-group {
 	position: relative;
 	display: flex;
+	flex: 0 0 auto;
 	flex-direction: column;
-	min-height: 0;
 	margin-bottom: 8px;
 }
 .project-group > .conversation:first-child {
@@ -1238,25 +1239,24 @@ body:not(.is-list-resizing) .list-collapsed:not(.list-hover-suppressed) .chat-li
 	color: var(--color-text-secondary);
 }
 .project-children-scroll {
-	/* 单个项目展开后优先占用侧栏的大部分可视高度，超出后再在项目内部滚动，避免历史会话把整列无限撑长。 */
 	display: flex;
+	flex: 0 0 auto;
 	flex-direction: column;
 	gap: 0;
-	min-height: 0;
-	max-height: min(56vh, 520px);
-	overflow-y: auto;
-	overflow-x: hidden;
-	scrollbar-width: none;
-}
-.project-children-scroll::-webkit-scrollbar {
-	width: 0;
-	height: 0;
 }
 
 .project-session-list {
 	display: grid;
 	gap: 0;
 	margin: 0;
+	max-height: min(280px, 34vh);
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
+}
+.project-session-list::-webkit-scrollbar {
+	width: 0;
+	height: 0;
 }
 .project-session-divider {
 	height: 1px;
