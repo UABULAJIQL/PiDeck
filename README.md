@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.6.0-green)
+![Version](https://img.shields.io/badge/version-0.6.2-green)
 
 这个仓库主要是我自己的桌面工作台，围绕日常使用对原版 `PiDeck` 做功能取舍和定制调整。
 目前主要在 Windows 环境下正常使用，其他系统暂时没有认真测试，兼容性不保证。

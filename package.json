@@ -1,6 +1,6 @@
 {
   "name": "pi-desktop",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "PiDeck workbench for managing multiple pi RPC agents across project folders.",
   "private": true,
   "license": "MIT",
@@ -18,7 +18,7 @@
     "build": "tsc --noEmit && electron-vite build",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win nsis portable zip",
+    "dist:win": "npm run build && electron-builder --win nsis",
     "dist:mac": "npm run build && electron-builder --mac dmg zip",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb tar.gz",
     "preview": "electron-vite preview",
@@ -54,9 +54,7 @@
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        "nsis",
-        "portable",
-        "zip"
+        "nsis"
       ]
     },
     "nsis": {

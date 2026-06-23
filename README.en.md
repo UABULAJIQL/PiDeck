@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/Electron-38-47848f)
 ![React](https://img.shields.io/badge/React-19-61dafb)
-![Version](https://img.shields.io/badge/version-0.6.0-green)
+![Version](https://img.shields.io/badge/version-0.6.2-green)
 
 This repository is mainly my own desktop workbench, where I trim and extend the original `PiDeck` around my day-to-day workflow needs.
 It is currently used and verified mainly on Windows. Other operating systems have not been seriously tested yet, so compatibility is not guaranteed.

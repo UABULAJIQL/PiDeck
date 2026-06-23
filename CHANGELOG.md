@@ -6,6 +6,26 @@ All notable changes to PiDeck are documented here.
 
 ## [Unreleased]
 
+## v0.6.2 - 2026-06-24
+
+### Added
+
+- Feishu remote-control integration, including streaming cards, maintenance docs, and guided setup flows.
+- Monaco-based file viewer and diff editor support for in-app file inspection and editing.
+- Quick prompts, approval flow improvements, and richer slash-command / workspace interactions.
+
+### Changed
+
+- Settings and workspace navigation now better match the current desktop workflow, including repository/about entry points and provider proxy support.
+- App structure, session handling, and message rendering were refactored to support larger conversations and more stable multi-panel interactions.
+- README and contributor-facing documentation were refreshed to match the current maintained distribution path.
+
+### Fixed
+
+- Model endpoint auto-completion and provider model-fetch error states are more reliable across vendors.
+- Missing files now open with an empty-state response instead of surfacing a hard read error in the editor.
+- Anthropic Messages model discovery retries and pasted-image input behavior were corrected.
+
 ### Removed
 
 - Removed issue feedback, in-app update checks, pi update notices, and links to the former upstream project/contact surfaces.
