@@ -559,7 +559,6 @@ export function App() {
     rpcTimeout: 600_000,
     linkOpenMode: "external",
     maxEditorFileSizeMB: 5,
-    providerPrefixes: {} as Record<string, string>,
   });
   const [settingsNotice, setSettingsNotice] = useState("");
   const [piProxyNotice, setPiProxyNotice] = useState("");
@@ -3032,7 +3031,6 @@ ${text}
       return;
 
     const uiSlashCommand = !images?.length && isExtensionSlashCommand(message);
-    const finalMessage = applyFirstMessagePrefix(message);
 
     // ── /goal 命令处理 ──
     if (message.trim().startsWith("/goal")) {
@@ -3064,11 +3062,11 @@ ${text}
     setSuggestionsOpen(false);
     setSendBehaviorMenuOpen(false);
     pendingUiSlashCommandRef.current = uiSlashCommand
-      ? { agentId: activeAgentId, command: finalMessage }
+      ? { agentId: activeAgentId, command: message }
       : null;
     if (uiSlashCommand) setPendingUiSlashCommandAgentId(activeAgentId);
     try {
-      await submitPromptSnapshot(activeAgentId, finalMessage, images, undefined, uiSlashCommand);
+      await submitPromptSnapshot(activeAgentId, message, images, undefined, uiSlashCommand);
     } catch (error) {
       pendingUiSlashCommandRef.current = null;
       if (uiSlashCommand) setPendingUiSlashCommandAgentId(null);
@@ -3097,12 +3095,11 @@ ${text}
       return;
     const message = prompt;
     const images = attachedImages.length > 0 ? attachedImages : undefined;
-    const finalMessage = applyFirstMessagePrefix(message);
     setPrompt("");
     setAttachedImages([]);
     setSuggestionsOpen(false);
     setSendBehaviorMenuOpen(false);
-    await submitPromptSnapshot(activeAgentId, finalMessage, images, "followUp");
+    await submitPromptSnapshot(activeAgentId, message, images, "followUp");
   }
 
   /** 处理 /goal 命令 */
@@ -3184,25 +3181,6 @@ ${goalTextRef.current}
     // 将目标文本作为普通消息发送（不使用 followUp，避免显示错误的消息标签）
     void submitPromptSnapshot(activeAgentId!, objective);
     // 目标文本作为用户消息显示在对话中，goal 状态可通过 /goal status 查看
-  }
-
-  /**
-   * 新会话首条消息自动携带前缀，只在使用该 provider 时才生效。
-   * 从 settings.providerPrefixes 中按当前 provider 名查找。
-   * shell 命令（! / !!）和斜杠命令（/）不生效。
-   */
-  function applyFirstMessagePrefix(message: string) {
-    const trimmedMessage = message.trim();
-    const currentProvider = activeRuntimeState?.provider;
-    const providerPrefixes = settings.providerPrefixes ?? {};
-    const prefix = currentProvider
-      ? (providerPrefixes[currentProvider] ?? "").trim()
-      : "";
-    const isFirstMessage =
-      activeMessages.length === 0 &&
-      !trimmedMessage.startsWith("!") &&
-      !trimmedMessage.startsWith("/");
-    return isFirstMessage && prefix ? `${prefix}\n\n${message}` : message;
   }
 
   async function submitPromptSnapshot(

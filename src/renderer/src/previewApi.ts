@@ -150,7 +150,6 @@ let previewSettings: AppSettings = {
 	rpcTimeout: 600_000,
 	linkOpenMode: "external",
 	maxEditorFileSizeMB: 5,
-	providerPrefixes: {} as Record<string, string>,
 };
 
 export function createPreviewApi(): PiDesktopApi {

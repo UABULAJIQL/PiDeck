@@ -970,8 +970,6 @@ function ConfigModalContent(props: ConfigModalProps) {
 							testResult={testResult}
 							testModelIdByProvider={testModelIdByProvider}
 							saving={saving}
-							settings={settings}
-							onSettingsChange={onSettingsChange}
 							onToggleProvider={(name) =>
 								setExpandedProvider(expandedProvider === name ? null : name)
 							}

@@ -6195,19 +6195,6 @@ body.is-composer-resizing .composer-resize-handle::after {
 	white-space: pre-wrap;
 	word-break: break-word;
 }
-.config-session-prefix-row {
-	align-items: start;
-}
-.config-session-prefix-control {
-	display: grid;
-	gap: var(--space-2);
-	width: 100%;
-}
-.config-session-prefix-control small {
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-meta);
-	line-height: var(--line-height-normal);
-}
 .ui-select-control {
 	width: 100%;
 	height: var(--control-height-lg);

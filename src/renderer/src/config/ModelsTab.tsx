@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { t } from "../i18n";
-import type { AppSettings } from "../../../shared/types";
 import type { ModelItem, ModelsFile } from "./configTypes";
 import { ApiTypeInput, ConfigSelect, SecretInput } from "./ConfigShared";
 import {
@@ -130,8 +129,6 @@ export function ModelsTab(props: {
 	} | null;
 	testModelIdByProvider: Record<string, string>;
 	saving: boolean;
-	settings: Pick<AppSettings, "providerPrefixes">;
-	onSettingsChange: (patch: Pick<Partial<AppSettings>, "providerPrefixes">) => void;
 	onToggleProvider: (name: string) => void;
 	onStartAddProvider: () => void;
 	onCancelAddProvider: () => void;
@@ -352,8 +349,6 @@ export function ModelsTab(props: {
 					const providerAdvancedFields = Object.keys(provider).filter(
 						(key) => !KNOWN_PROVIDER_FIELDS.has(key),
 					);
-					const providerPrefixes = props.settings.providerPrefixes ?? {};
-					const providerPrefix = providerPrefixes[name] ?? "";
 					const providerComplexFields = ["headers", "authHeader", "compat", "modelOverrides", "oauth"].filter(
 						(key) => provider[key] !== undefined,
 					);
@@ -727,31 +722,6 @@ export function ModelsTab(props: {
 													/>
 													<span>{t("config.reasoningEffort")}</span>
 												</label>
-											</div>
-										</div>
-
-										<div className="config-form-row config-session-prefix-row">
-											<label>{t("settings.firstMessagePrefix")}</label>
-											<div className="config-session-prefix-control">
-												<textarea
-													className="setting-textarea"
-													value={providerPrefix}
-													placeholder={t("settings.firstMessagePrefixPlaceholder")}
-													rows={3}
-													onChange={(e) =>
-														props.onSettingsChange({
-															providerPrefixes: {
-																...providerPrefixes,
-																[name]: e.target.value,
-															},
-														})
-													}
-												/>
-												<small>
-													{t("settings.firstMessagePrefixDesc")}
-													<br />
-													{t("settings.firstMessagePrefixHint")}
-												</small>
 											</div>
 										</div>
 

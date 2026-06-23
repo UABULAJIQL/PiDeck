@@ -268,9 +268,6 @@ export type AppSettings = {
 	linkOpenMode: LinkOpenMode;
 	/** 编辑器最大文件大小（MB），超过此大小的文件不加载编辑器。默认 5MB。 */
 	maxEditorFileSizeMB: number;
-	/** 每次新会话的第一条消息自动携带的前缀内容，按 provider 名存储 */
-	providerPrefixes: Record<string, string>;
-
 	/** 上次退出时的窗口位置、尺寸和最大化状态，用于启动时恢复 */
 	windowState?: AppWindowState;
 };
