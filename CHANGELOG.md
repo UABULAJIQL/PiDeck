@@ -10,38 +10,33 @@ All notable changes to PiDeck are documented here.
 
 ### 🚀 New Features
 
-- **Feishu remote control**: Added a Feishu bridge so agents can be controlled remotely, along with setup guidance and maintenance documentation.
-- **Feishu streaming cards v4**: Remote activity is now easier to follow with live progress cards, faster confirmation feedback, and better parallel-start behavior.
-- **Upgraded built-in file editor**: Added a Monaco-based file viewer, diff editor, in-app editing flow, and Git workspace change entry points.
-- **Expanded quick-input workflow**: Added and refined quick prompts, app-level persistence, floating input helpers, and a fuller slash-command panel.
-- **Approval and command UX improvements**: Approval flow, prompt-prefix handling, and command-trigger interactions are smoother for frequent desktop workflows.
-- **Pi plugin management improvements**: Added Pi plugin enable/disable support with better recommendation and onboarding surfaces.
-- **Stronger settings and extension entry points**: The settings area now includes repository/about entry points and provider proxy support.
+- **Built-in file editor**: Added a Monaco-based file viewer, diff editor, and in-app save flow, with Git HEAD comparison and large-file safeguards.
+- **Model configuration improvements**: The Models tab now supports model input capabilities such as image input, plus provider-level `proxyPort` / `useProxy` settings.
+- **Better model discovery**: Vendor `models` endpoints now auto-complete from `baseUrl`, and model-fetch error states are clearer.
+- **Quick prompts and command stage**: Added app-level quick prompt presets with persistence, popover management, and one-click insert, plus a fuller slash-command stage panel.
+- **Approval interactions**: Added and refined desktop approval dialogs for confirm, select, and input-style server-initiated requests.
+- **Pi extension management**: Added extension enable/disable, recommended package install flows, remarks, and project/global scope management.
+- **Desktop shell upgrades**: Added single-instance startup, window-state restore, and repository/about entry points in settings.
 
 ### ✨ Improvements
 
-- **Workspace interaction refresh**: Agent and history items now behave more consistently inside each project, with better sidebar scrolling, grouping, and session merge behavior.
-- **Long-session stability**: Rendering, message syncing, thinking-state animation, and workspace switching are more stable in large conversations.
-- **Model and config ergonomics**: Vendor `baseUrl` and models endpoints now auto-complete more reliably, and model-fetch error feedback is clearer.
-- **File-editing workflow polish**: Diff persistence, changed-file awareness, Git workspace state, and external editor management are more complete.
-- **App state and window behavior**: Single-instance startup, window state handling, update recommendation flow, and restart interactions better fit desktop usage.
-- **Docs and entry-point refresh**: README, contributor links, and Feishu maintenance docs were updated to match the current maintained distribution path.
+- **Session and sidebar experience**: Improved per-project session lists, sidebar expand/collapse scroll handoff, and history pagination.
+- **Long-session performance**: Reduced lag in long conversations by improving rendering and message synchronization.
+- **File workflow polish**: Expanded diff persistence, Git workspace change visibility, and related editor settings.
+- **Interaction polish**: Quick prompts, approval flow, and workspace switching feel smoother in high-frequency workflows.
+- **Docs refresh**: Simplified README content and added a `CONTRIBUTORS` entry point for the maintained fork.
 
 ### 🐛 Fixes
 
-- **Feishu result rendering**: Fixed Feishu streaming-card results not rendering correctly.
-- **Deleted-file handling**: Opening a deleted file now shows a friendly empty state instead of a hard read error.
-- **Anthropic model discovery**: Corrected the Anthropic Messages retry path and `/v1/models` probing behavior.
-- **Model-fetch feedback**: Error messaging now reflects the dual-path retry strategy more accurately.
-- **Pasted-image input**: Fixed pasted-image preview and input behavior regressions.
-- **Session visibility and activation**: Fixed duplicate history / agent activation, blank messages after opening history sessions, and unexpected session reordering.
-- **Duplicate-creation guard**: Added session-level creation deduplication to prevent rapid repeated clicks from creating multiple agents.
-- **Cleanup of residual issues**: Removed leftover merge-conflict code and fixed several smaller Feishu and workspace interaction bugs.
+- **Deleted-file empty state**: Opening a deleted file now shows a friendly empty state instead of a hard error.
+- **Anthropic model discovery**: `/v1/models` probing and dual-path retry messaging were corrected.
+- **Pasted-image preview**: Fixed pasted-image preview behavior in the composer.
+- **Sidebar scroll edge case**: Fixed scroll handoff after expanding or collapsing project sessions in the left sidebar.
+- **Residual code cleanup**: Removed leftover merge-conflict code.
 
 ### Removed
 
-- **Legacy entry points**: Removed issue feedback, in-app update checks, pi update notices, and links to former upstream contact surfaces.
-- **QR-based config flow**: Removed the QR setup path and kept the simpler manual App ID + App Secret flow.
+- **Built-in update / telemetry logic**: Removed built-in update telemetry logic and related legacy entry points.
 - **First-message prefix**: Removed the first-message prefix feature to simplify default prompting behavior.
 
 ## v0.6.1 - 2026-06-16
