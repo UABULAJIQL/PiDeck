@@ -9,6 +9,11 @@ type PiProxySettings = Pick<
   "piProxyEnabled" | "piProxyUrl" | "piProxyBypass"
 >;
 
+export type PiProcessProxyOverride = {
+  proxyUrl?: string;
+  bypass?: string;
+};
+
 export type PiCommandInvocation = {
   command: string;
   args: string[];
@@ -65,7 +70,11 @@ export class PiLocator {
     return [...new Set(dirs.filter(Boolean))];
   }
 
-  createProcessEnv(settings?: PiProxySettings, pathPrefix?: string) {
+  createProcessEnv(
+    settings?: PiProxySettings,
+    pathPrefix?: string,
+    proxyOverride?: PiProcessProxyOverride,
+  ) {
     const searchDirs = pathPrefix
       ? [pathPrefix, ...this.getSearchDirs().filter(dir => dir !== pathPrefix)]
       : this.getSearchDirs();
@@ -74,7 +83,7 @@ export class PiLocator {
       PATH: searchDirs.join(delimiter),
     };
 
-    return this.applyPiProxyEnv(env, settings);
+    return this.applyPiProxyEnv(env, settings, proxyOverride);
   }
 
   createInvocation(command: string, args: string[]): PiCommandInvocation {
@@ -106,11 +115,15 @@ export class PiLocator {
   private applyPiProxyEnv(
     env: NodeJS.ProcessEnv,
     settings?: PiProxySettings,
+    proxyOverride?: PiProcessProxyOverride,
   ) {
-    if (!settings?.piProxyEnabled) return env;
-    const proxyUrl = settings.piProxyUrl.trim();
+    const proxyUrl = proxyOverride?.proxyUrl?.trim()
+      ? proxyOverride.proxyUrl.trim()
+      : settings?.piProxyEnabled && settings.piProxyUrl.trim()
+        ? settings.piProxyUrl.trim()
+        : "";
     if (!proxyUrl) return env;
-    const bypass = settings.piProxyBypass.trim();
+    const bypass = proxyOverride?.bypass?.trim() ?? settings?.piProxyBypass.trim() ?? "";
 
     // 这里只给 pi agent 子进程注入标准代理环境变量，避免误影响 desktop 自身的更新、外链和配置管理请求。
     return {

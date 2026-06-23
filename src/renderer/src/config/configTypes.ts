@@ -16,7 +16,14 @@ export type ProviderConfig = {
 	baseUrl?: string;
 	api?: string;
 	apiKey?: string;
+	proxyPort?: number;
 	models: ModelItem[];
+	compat?: {
+		supportsDeveloperRole?: boolean;
+		supportsReasoningEffort?: boolean;
+		useProxy?: boolean;
+		[key: string]: unknown;
+	};
 	[key: string]: unknown;
 };
 

@@ -1,6 +1,7 @@
 import { app, type BrowserWindow, Notification } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { ConfigManager, type PiProviderConfig } from "../config/ConfigManager";
 import type {
 	AgentMessagePatch,
 	AgentRuntimeState,
@@ -69,6 +70,7 @@ export class AgentManager {
 		private readonly getWindow: () => BrowserWindow | null,
 		private readonly settingsStore: SettingsStore,
 		private readonly imageAssetStore: ImageAssetStore,
+		private readonly configManager: ConfigManager,
 	) {}
 
 	list() {
@@ -170,69 +172,18 @@ export class AgentManager {
 		if (input.sessionPath) await this.repairAssistantUsage(input.sessionPath);
 
 		// 代理环境变量只能在子进程启动前注入；设置变更后通过 restart/new agent 创建新的进程快照。
-		// 优先从预热池中取匹配 cwd 的闲置进程，避免重复 spawn。
-		const pooledProcess = this.acquireFromPool(project.path);
-		const process = pooledProcess ?? new PiProcess(project.path, this.settingsStore.get());
+		// 这里优先按“项目路径 + 代理 URL 快照”复用预热进程，避免把走代理/不走代理的会话串用到同一个子进程。
+		const startProxy = await this.resolveProxyOverride();
+		const pooledProcess = this.acquireFromPool(project.path, startProxy?.proxyUrl);
+		const process = pooledProcess ?? new PiProcess(project.path, this.settingsStore.get(), {
+			proxyOverride: startProxy,
+		});
 		const runtime: AgentRuntime = { tab, process };
 		this.agents.set(id, runtime);
 		this.messages.set(id, []);
 		this.emitState();
 
-		process.on("event", (event) => this.handlePiEvent(id, event));
-		process.on("server-request", (request) =>
-			this.handleServerRequest(id, request as RpcServerRequest),
-		);
-		process.on("stderr", (text) =>
-			this.emit(ipcChannels.agentsLog, { agentId: id, text }),
-		);
-		process.on("protocol-error", (line) =>
-			this.emit(ipcChannels.agentsLog, {
-				agentId: id,
-				text: `Protocol error: ${line}`,
-			}),
-		);
-		// 转发 RPC 日志到前端，用于调试面板展示请求/响应/事件
-		process.on("rpc-log", (entry: { direction: string; data: unknown }) => {
-			const data = entry.data as Record<string, any>;
-			let summary: string;
-			if (entry.direction === "send") {
-				// 发送的命令：显示类型和关键参数
-				const type = data.type ?? "?";
-				if (type === "prompt")
-					summary = `→ prompt: ${(data.message ?? "").slice(0, 60)}`;
-				else if (type === "set_model")
-					summary = `→ set_model: ${data.provider}/${data.modelId}`;
-				else if (type === "set_thinking_level")
-					summary = `→ set_thinking: ${data.level}`;
-				else if (type === "bash")
-					summary = `→ bash: ${(data.command ?? "").slice(0, 60)}`;
-				else summary = `→ ${type}`;
-			} else {
-				// 收到的响应/事件
-				const type = data.type ?? "?";
-				if (type === "response")
-					summary = `← ${data.command ?? "?"} ${data.success ? "✓" : "✗"}${data.error ? ` ${data.error}` : ""}`;
-				else if (type === "message_update") {
-					const evt = data.assistantMessageEvent?.type ?? "?";
-					summary = `← message_update.${evt}`;
-				} else summary = `← ${type}`;
-			}
-			this.emit(ipcChannels.agentsRpcLog, {
-				agentId: id,
-				direction: entry.direction,
-				summary,
-				data,
-			});
-		});
-		process.on("exit", () => {
-			tab.status = "closed";
-			this.emitState();
-		});
-		process.on("error", (error) => {
-			tab.status = "error";
-			this.addMessage(id, "error", error.message);
-			this.emitState();
-		});
+		this.attachProcessListeners(id, runtime);
 
 		const client = process.start(input.sessionPath);
 
@@ -261,6 +212,7 @@ export class AgentManager {
 				.catch(() => new Promise((resolve) => setTimeout(resolve, 800)))
 				.then(() => this.loadMessages(id))
 				.catch(() => undefined);
+			await this.restartForProxyChange(id, (data as { model?: { provider?: string } } | undefined)?.model?.provider);
 		} catch (error) {
 			tab.status = "error";
 			this.addMessage(
@@ -509,6 +461,8 @@ export class AgentManager {
 	async cycleModel(agentId: string) {
 		const runtime = this.requireRuntime(agentId);
 		await runtime.process.client.request({ type: "cycle_model" }, 60_000);
+		const state = await this.getRuntimeState(agentId);
+		await this.restartForProxyChange(agentId, state.provider);
 		return this.getRuntimeState(agentId);
 	}
 
@@ -527,6 +481,7 @@ export class AgentManager {
 			{ type: "set_model", provider, modelId },
 			60_000,
 		);
+		await this.restartForProxyChange(agentId, provider);
 		return this.getRuntimeState(agentId);
 	}
 
@@ -681,10 +636,13 @@ export class AgentManager {
 		const stateResponse = await runtime.process.client
 			.request({ type: "get_state" })
 			.catch(() => ({ data: undefined }));
-		const state = stateResponse.data as { sessionFile?: string; sessionName?: string } | undefined;
+		const state = stateResponse.data as
+			| { sessionFile?: string; sessionName?: string; model?: { provider?: string } }
+			| undefined;
 		if (state?.sessionFile) runtime.tab.sessionPath = state.sessionFile;
 		if (state?.sessionName) runtime.tab.title = state.sessionName;
 		await this.loadMessages(agentId).catch(() => undefined);
+		await this.restartForProxyChange(agentId, state?.model?.provider);
 		this.emitState();
 	}
 
@@ -773,9 +731,9 @@ export class AgentManager {
 		this.warmPool.length = 0;
 	}
 
-	/** 从预热池中匹配 cwd 的闲置进程 */
-	private acquireFromPool(cwd: string): PiProcess | undefined {
-		const idx = this.warmPool.findIndex((p) => p.matches(cwd));
+	/** 从预热池中匹配 cwd + 代理快照的闲置进程 */
+	private acquireFromPool(cwd: string, proxyUrl?: string): PiProcess | undefined {
+		const idx = this.warmPool.findIndex((p) => p.matches(cwd, proxyUrl));
 		if (idx === -1) return undefined;
 		const [proc] = this.warmPool.splice(idx, 1);
 		proc.unpark();
@@ -980,6 +938,129 @@ export class AgentManager {
 		const window = this.getWindow();
 		if (!window || window.isDestroyed()) return;
 		window.webContents.send(channel, payload);
+	}
+
+	private async restartForProxyChange(agentId: string, provider?: string) {
+		const runtime = this.requireRuntime(agentId);
+		const nextProxy = await this.resolveProxyOverride(provider);
+		const currentProxy = runtime.process.proxyUrl;
+		if ((nextProxy?.proxyUrl || undefined) === currentProxy) return;
+		await this.restartInPlace(agentId, nextProxy);
+	}
+
+	private async restartInPlace(agentId: string, proxyOverride?: { proxyUrl?: string; bypass?: string }) {
+		const runtime = this.requireRuntime(agentId);
+		const { projectId, title } = runtime.tab;
+		const project = this.getProject(projectId);
+		if (!project) throw new Error(`Project not found: ${projectId}`);
+
+		let sessionPath = runtime.tab.sessionPath;
+		if (!sessionPath) {
+			try {
+				const state = await runtime.process.client.request({ type: "get_state" });
+				sessionPath =
+					(state.data as { sessionFile?: string } | undefined)?.sessionFile ??
+					undefined;
+			} catch {
+				/* 获取失败时继续用缓存值 */
+			}
+		}
+
+		const oldProcess = runtime.process;
+		this.pendingServerRequests.delete(agentId);
+		this.pendingUiSlashCommands.delete(agentId);
+		this.bashInputRequests.clearAgent(agentId);
+		this.clearWarmPool();
+		oldProcess.removeAllListeners();
+		oldProcess.stop();
+		const process = new PiProcess(project.path, this.settingsStore.get(), {
+			proxyOverride,
+		});
+		runtime.process = process;
+		runtime.tab.status = "starting";
+		this.attachProcessListeners(agentId, runtime);
+		const client = process.start(sessionPath);
+		try {
+			const state = await client.request({ type: "get_state" });
+			const data = state.data as
+				| { sessionId?: string; sessionFile?: string; sessionName?: string }
+				| undefined;
+			runtime.tab.sessionId = data?.sessionId;
+			runtime.tab.sessionPath = data?.sessionFile ?? sessionPath;
+			runtime.tab.title = data?.sessionName || title;
+			runtime.tab.status = "idle";
+			await this.loadMessages(agentId).catch(() => undefined);
+		} catch (error) {
+			runtime.tab.status = "error";
+			this.addMessage(
+				agentId,
+				"error",
+				error instanceof Error ? error.message : String(error),
+			);
+		}
+		this.emitState();
+	}
+
+	private attachProcessListeners(agentId: string, runtime: AgentRuntime) {
+		const { process, tab } = runtime;
+		process.on("event", (event) => this.handlePiEvent(agentId, event));
+		process.on("server-request", (request) =>
+			this.handleServerRequest(agentId, request as RpcServerRequest),
+		);
+		process.on("stderr", (text) =>
+			this.emit(ipcChannels.agentsLog, { agentId, text }),
+		);
+		process.on("protocol-error", (line) =>
+			this.emit(ipcChannels.agentsLog, {
+				agentId,
+				text: `Protocol error: ${line}`,
+			}),
+		);
+		process.on("rpc-log", (entry: { direction: string; data: unknown }) => {
+			const data = entry.data as Record<string, any>;
+			let summary: string;
+			if (entry.direction === "send") {
+				const type = data.type ?? "?";
+				if (type === "prompt") summary = `→ prompt: ${(data.message ?? "").slice(0, 60)}`;
+				else if (type === "set_model") summary = `→ set_model: ${data.provider}/${data.modelId}`;
+				else if (type === "set_thinking_level") summary = `→ set_thinking: ${data.level}`;
+				else if (type === "bash") summary = `→ bash: ${(data.command ?? "").slice(0, 60)}`;
+				else summary = `→ ${type}`;
+			} else {
+				const type = data.type ?? "?";
+				if (type === "response") summary = `← ${data.command ?? "?"} ${data.success ? "✓" : "✗"}${data.error ? ` ${data.error}` : ""}`;
+				else if (type === "message_update") {
+					const evt = data.assistantMessageEvent?.type ?? "?";
+					summary = `← message_update.${evt}`;
+				} else summary = `← ${type}`;
+			}
+			this.emit(ipcChannels.agentsRpcLog, {
+				agentId,
+				direction: entry.direction,
+				summary,
+				data,
+			});
+		});
+		process.on("exit", () => {
+			tab.status = "closed";
+			this.emitState();
+		});
+		process.on("error", (error) => {
+			tab.status = "error";
+			this.addMessage(agentId, "error", error.message);
+			this.emitState();
+		});
+	}
+
+	private async resolveProxyOverride(providerName?: string) {
+		if (!providerName) return undefined;
+		const models = await this.configManager.getModelsConfig();
+		const provider = models.parsed.providers?.[providerName] as PiProviderConfig | undefined;
+		const proxyPort = Number(provider?.proxyPort);
+		if (provider?.compat?.useProxy !== true || !Number.isInteger(proxyPort) || proxyPort < 1 || proxyPort > 65535) {
+			return undefined;
+		}
+		return { proxyUrl: `http://127.0.0.1:${proxyPort}` };
 	}
 }
 

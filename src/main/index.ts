@@ -573,6 +573,7 @@ if (!gotSingleInstanceLock) {
 			() => mainWindow,
 			settingsStore,
 			imageAssetStore,
+			configManager,
 		);
 		webServiceManager = new WebServiceManager({
 			listProjects: () => projectStore.list(),
@@ -602,10 +603,11 @@ if (!gotSingleInstanceLock) {
 		await quickPromptStore.load();
 		await sessionPinStore.load();
 		await remarkStore.load();
+		// 代理设置与局域网 Web 服务已从桌面端下线；
+		// 启动时只显式恢复 direct 模式，避免读取到旧配置后继续影响网络行为。
 		await applyDesktopProxy(settingsStore.get());
 		await webServiceManager.applySettings(settingsStore.get()).catch((error) => {
-			console.error("Failed to start web service:", error);
-			void settingsStore.update({ webServiceEnabled: false });
+			console.error("Failed to stop deprecated web service:", error);
 		});
 		registerIpcHandlers({
 					projectStore,

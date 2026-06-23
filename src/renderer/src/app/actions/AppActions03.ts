@@ -626,55 +626,14 @@ export async function updateSettings(
   ctx: AppContext,
   patch: Partial<AppSettings>,
 ) {
-  const { api, setPiProxyNotice, setPiProxyNoticeTone, setSettings, setSettingsNotice, settings, setWebServiceChanging } = ctx;
+  const { api, setSettings, setSettingsNotice } = ctx;
 
-    const changesWebService =
-      "webServiceEnabled" in patch ||
-      "webServiceHost" in patch ||
-      "webServicePort" in patch;
-    if (changesWebService) {
-      setWebServiceChanging(true);
-      setSettingsNotice(
-        patch.webServiceEnabled === false
-          ? t("app.webStopping")
-          : t("app.webApplying"),
-      );
-    }
     try {
       const next = await api.settings.update(patch);
       setSettings(next);
       let notice = t("app.settingsSaved");
-      if (
-        "piProxyEnabled" in patch ||
-        "piProxyUrl" in patch ||
-        "piProxyBypass" in patch
-      ) {
-        notice = next.piProxyEnabled
-          ? t("app.shellProxySaved")
-          : t("app.shellProxyDisabled");
-        setPiProxyNoticeTone("info");
-        setPiProxyNotice(next.piProxyEnabled ? t("app.shellProxySaved") : "");
-      }
-      if (
-        "desktopProxyEnabled" in patch ||
-        "desktopProxyUrl" in patch ||
-        "desktopProxyBypass" in patch
-      ) {
-        notice = next.desktopProxyEnabled
-          ? t("app.webProxySaved")
-          : t("app.webProxyDisabled");
-      }
       if ("sendShortcut" in patch) {
         notice = t("app.sendShortcutSaved");
-      }
-      if (
-        "webServiceEnabled" in patch ||
-        "webServiceHost" in patch ||
-        "webServicePort" in patch
-      ) {
-        notice = next.webServiceEnabled
-          ? t("app.webServiceStarted", { port: next.webServicePort })
-          : t("app.webServiceStopped");
       }
       if ("useNativeTitleBar" in patch) {
         notice = t("app.titleBarSaved");
@@ -683,40 +642,6 @@ export async function updateSettings(
     } catch (error) {
       setSettings(await api.settings.get());
       setSettingsNotice(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (changesWebService) setWebServiceChanging(false);
-    }
-  
-}
-
-export async function testPiProxy(ctx: AppContext) {
-  const { api, setPiProxyChecking, setPiProxyNotice, setPiProxyNoticeTone, settings } = ctx;
-
-    setPiProxyChecking(true);
-    setPiProxyNoticeTone("info");
-    setPiProxyNotice(t("app.proxyChecking"));
-    try {
-      const result = await api.settings.testPiProxy();
-      setPiProxyNoticeTone(result.success ? "success" : "error");
-      setPiProxyNotice(
-        result.success
-          ? t("app.proxyAvailable", {
-              message: result.message ?? t("app.proxyDefaultOk"),
-              elapsed: result.elapsedMs,
-            })
-          : t("app.proxyCheckFailed", {
-              error: result.error ?? t("app.proxyUnknownError"),
-            }),
-      );
-    } catch (error) {
-      setPiProxyNoticeTone("error");
-      setPiProxyNotice(
-        t("app.proxyCheckFailed", {
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    } finally {
-      setPiProxyChecking(false);
     }
   
 }

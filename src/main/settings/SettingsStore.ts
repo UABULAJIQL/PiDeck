@@ -46,7 +46,10 @@ export class SettingsStore {
         installationType: _installationType,
         ...rest
       } = persisted;
-      this.settings = { ...defaultSettings, ...(rest as Partial<AppSettings>) };
+      this.settings = this.normalizeDeprecatedNetworkSettings({
+        ...defaultSettings,
+        ...(rest as Partial<AppSettings>),
+      });
     } catch {
       this.settings = { ...defaultSettings };
     }
@@ -59,7 +62,10 @@ export class SettingsStore {
   }
 
   async update(patch: Partial<AppSettings>) {
-    this.settings = { ...this.settings, ...patch };
+    this.settings = this.normalizeDeprecatedNetworkSettings({
+      ...this.settings,
+      ...patch,
+    });
     await this.save();
     this.applyMenu();
     return this.get();
@@ -109,5 +115,18 @@ export class SettingsStore {
   private async save() {
     await mkdir(app.getPath("userData"), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(this.settings, null, 2), "utf8");
+  }
+
+  /**
+   * 代理设置与局域网 Web 服务已从桌面端移除；
+   * 这里在读写设置时统一强制关闭，避免旧版本遗留配置在无入口时继续生效。
+   */
+  private normalizeDeprecatedNetworkSettings(settings: AppSettings): AppSettings {
+    return {
+      ...settings,
+      piProxyEnabled: false,
+      desktopProxyEnabled: false,
+      webServiceEnabled: false,
+    };
   }
 }

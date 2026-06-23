@@ -144,24 +144,11 @@
 	border-right: 1px solid var(--color-border-subtle);
 	background: var(--color-bg-panel);
 }
-.settings-about {
-	margin-top: auto;
+.settings-about-panel {
 	display: grid;
-	gap: var(--space-2);
-	padding-top: var(--space-4);
-	border-top: 1px solid var(--color-border-subtle);
+	gap: var(--space-3);
 }
-.settings-about strong {
-	color: var(--color-text-primary);
-	font-size: var(--font-size-control);
-	font-weight: 600;
-}
-.settings-about small {
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-caption);
-	line-height: 1.4;
-}
-.settings-about a {
+.settings-about-panel a {
 	display: grid;
 	gap: 2px;
 	padding: 10px 12px;
@@ -172,19 +159,19 @@
 	text-decoration: none;
 	transition: all 0.15s ease;
 }
-.settings-about a:hover,
-.settings-about a:focus-visible {
+.settings-about-panel a:hover,
+.settings-about-panel a:focus-visible {
 	border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border-subtle));
 	background: var(--color-bg-hover);
 	color: var(--color-text-primary);
 	outline: none;
 	box-shadow: var(--focus-ring);
 }
-.settings-about a span {
+.settings-about-panel a span {
 	font-size: var(--font-size-caption);
 	font-weight: 600;
 }
-.settings-about a code {
+.settings-about-panel a code {
 	overflow: hidden;
 	color: var(--color-text-tertiary);
 	font-size: var(--font-size-micro);

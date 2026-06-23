@@ -441,6 +441,7 @@ export const enUS: Record<TranslationKey, string> = {
   "config.field.apiKey": "API Key",
   "config.field.apiType": "API type",
   "config.field.baseUrl": "Base URL",
+  "config.field.proxyPort": "Proxy port",
   "config.field.type": "Type",
   "config.field.userAgent": "User-Agent",
   "config.headerEmptyHint":
@@ -457,6 +458,7 @@ export const enUS: Record<TranslationKey, string> = {
   "config.needsFix": "Needs fix",
   "config.openFolder": "Open folder",
   "config.providerNamePlaceholder": "Provider name, for example openai",
+  "config.proxy": "Proxy",
   "config.reason": "Reason",
   "config.reasoning": "Reasoning",
   "config.reasoningEffort": "Reasoning effort",

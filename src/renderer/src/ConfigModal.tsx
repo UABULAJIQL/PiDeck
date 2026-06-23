@@ -470,6 +470,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 				provider.baseUrl,
 				provider.apiKey,
 				provider.api as string | undefined,
+				provider.compat?.useProxy === true ? provider.proxyPort : undefined,
 			);
 			if (result.success && result.models) {
 				setFetchedModels((prev) => ({
@@ -525,6 +526,7 @@ function ConfigModalContent(props: ConfigModalProps) {
 				modelId,
 				provider.api as string | undefined,
 				getProviderHeaders(provider.headers),
+				provider.compat?.useProxy === true ? provider.proxyPort : undefined,
 			);
 			setTestResult({ providerName, ...result });
 		} catch (e) {

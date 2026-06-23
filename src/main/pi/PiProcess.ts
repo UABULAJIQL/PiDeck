@@ -1,13 +1,17 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PiRpcClient, type RpcServerRequest } from "./PiRpcClient";
-import { PiLocator } from "./PiLocator";
+import { PiLocator, type PiProcessProxyOverride } from "./PiLocator";
 import type { AppSettings } from "../../shared/types";
 
 type PiProcessSettings = Pick<
   AppSettings,
   "piProxyEnabled" | "piProxyUrl" | "piProxyBypass" | "customPiPath"
 >;
+
+type PiProcessStartOptions = {
+  proxyOverride?: PiProcessProxyOverride;
+};
 
 export class PiProcess extends EventEmitter {
   private proc?: ChildProcessWithoutNullStreams;
@@ -18,13 +22,18 @@ export class PiProcess extends EventEmitter {
   constructor(
     private readonly cwd: string,
     private readonly settings?: PiProcessSettings,
+    private readonly startOptions?: PiProcessStartOptions,
   ) {
     super();
   }
 
-  /** 判断当前进程是否匹配指定的 cwd，用于预热池查找 */
-  matches(targetCwd: string): boolean {
-    return this.cwd === targetCwd && this.isRunning();
+  get proxyUrl(): string | undefined {
+    return this.startOptions?.proxyOverride?.proxyUrl?.trim() || undefined;
+  }
+
+  /** 判断当前进程是否匹配指定的 cwd + 代理快照，用于预热池查找 */
+  matches(targetCwd: string, proxyUrl?: string): boolean {
+    return this.cwd === targetCwd && this.proxyUrl === (proxyUrl?.trim() || undefined) && this.isRunning();
   }
 
   /**
@@ -73,7 +82,7 @@ export class PiProcess extends EventEmitter {
       cwd: this.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       shell: invocation.shell,
-      env: locator.createProcessEnv(this.settings, invocation.pathPrefix),
+      env: locator.createProcessEnv(this.settings, invocation.pathPrefix, this.startOptions?.proxyOverride),
       windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     });
 

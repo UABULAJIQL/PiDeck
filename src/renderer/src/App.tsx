@@ -613,7 +613,7 @@ export function App() {
   }
 
   async function testPiProxy() {
-    return AppActions03.testPiProxy(appContext);
+    return undefined;
   }
 
   async function switchBranch(branch: string) {

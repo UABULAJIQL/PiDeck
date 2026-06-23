@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
-import { net } from "electron";
+import { net, session } from "electron";
 import type { ConfigFileDiagnostic, ConfigFileReadResult } from "../../shared/types";
 
 /** pi 全局配置目录：~/.pi/agent/ */
@@ -45,6 +45,13 @@ export type PiProviderConfig = {
 	baseUrl?: string;
 	api?: string;
 	apiKey?: string;
+	proxyPort?: number;
+	compat?: {
+		supportsDeveloperRole?: boolean;
+		supportsReasoningEffort?: boolean;
+		useProxy?: boolean;
+		[key: string]: unknown;
+	};
 	models: PiModelItem[];
 	[key: string]: unknown;
 };
@@ -78,6 +85,10 @@ type TestRequest = {
 	headers: Record<string, string>;
 	body?: string;
 	method?: "GET" | "POST";
+};
+
+type ProviderFetchOptions = {
+	proxyPort?: number;
 };
 
 /**
@@ -309,6 +320,7 @@ export class ConfigManager {
 		baseUrl: string,
 		apiKey: string,
 		apiType?: string,
+		proxyPort?: number,
 	): Promise<{ success: boolean; models?: Array<{ id: string; name?: string }>; error?: string }> {
 		const requests = this.buildModelsRequest(baseUrl, apiKey, apiType);
 		let lastError: string | undefined;
@@ -320,12 +332,13 @@ export class ConfigManager {
 				const timeout = setTimeout(() => controller.abort(), 10_000);
 
 				try {
-					// 桌面端配置检测属于 Electron 主进程自身请求；使用 net.fetch 才能走 defaultSession 的代理配置。
-					const res = await net.fetch(request.url, {
+					// 配置页测试需要支持 provider 级代理，但不能污染全局 defaultSession。
+					// 这里按需创建隔离 session，仅让本次 fetch 走 http://127.0.0.1:<proxyPort>。
+					const res = await this.fetchWithOptionalProxy(request.url, {
 						method: request.method ?? "GET",
 						headers: request.headers,
 						signal: controller.signal,
-					});
+					}, { proxyPort });
 
 					if (!res.ok) {
 						lastError = `HTTP ${res.status}: ${res.statusText}`;
@@ -640,6 +653,28 @@ export class ConfigManager {
 		return hasUserAgent ? headers : { ...headers, "User-Agent": "anthropic-sdk-typescript/0.27.3" };
 	}
 
+	private async fetchWithOptionalProxy(
+		url: string,
+		init: Parameters<typeof net.fetch>[1],
+		options?: ProviderFetchOptions,
+	) {
+		const proxyPort = this.normalizeProxyPort(options?.proxyPort);
+		if (!proxyPort) return net.fetch(url, init);
+		const proxySession = session.fromPartition(`pideck-provider-proxy-${proxyPort}`);
+		await proxySession.setProxy({
+			mode: "fixed_servers",
+			proxyRules: `http://127.0.0.1:${proxyPort}`,
+		});
+		return proxySession.fetch(url, init);
+	}
+
+	private normalizeProxyPort(value?: number) {
+		if (!Number.isFinite(value)) return undefined;
+		const port = Math.trunc(value as number);
+		if (port < 1 || port > 65535) return undefined;
+		return port;
+	}
+
 	private redactSecret(value: string, apiKey: string) {
 		if (!apiKey) return value;
 		return value.split(apiKey).join("***");
@@ -773,6 +808,7 @@ export class ConfigManager {
 		modelId: string,
 		apiType?: string,
 		requestHeaders?: Record<string, string>,
+		proxyPort?: number,
 	): Promise<{
 		success: boolean;
 		model?: string;
@@ -796,12 +832,12 @@ export class ConfigManager {
 
 			let res: Awaited<ReturnType<typeof net.fetch>>;
 			try {
-				res = await net.fetch(requestUrl, {
+				res = await this.fetchWithOptionalProxy(requestUrl, {
 					method: "POST",
 					headers,
 					body: requestBody,
 					signal: controller.signal,
-				});
+				}, { proxyPort });
 			} finally {
 				clearTimeout(timeout);
 			}

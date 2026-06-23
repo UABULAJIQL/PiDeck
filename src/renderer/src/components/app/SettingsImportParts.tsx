@@ -18,9 +18,8 @@ import {
 	GitBranch,
 	Brain,
 	Folder,
-	Globe2,
+	Info,
 	MessageCircle,
-	Network,
 	Pin,
 	Plus,
 	RefreshCw,
@@ -82,10 +81,6 @@ export function SettingsModal(props: {
 	notice: string;
 	piStatus: PiInstallStatus | null;
 	piChecking: boolean;
-	piProxyChecking: boolean;
-	piProxyNotice: string;
-	piProxyNoticeTone: "info" | "success" | "error";
-	webServiceChanging: boolean;
 	appInfo: AppInfo;
 	customPiPath: string;
 	customPathValidating: boolean;
@@ -94,27 +89,13 @@ export function SettingsModal(props: {
 	onValidateCustomPath: () => void;
 	onClearCustomPath: () => void;
 	onCheckPi: () => void;
-	onTestPiProxy: () => void;
 	onToggleDevTools: () => void;
 	onRestartApp: () => void;
-	onOpenWebService: (port: string) => void;
 	onClose: () => void;
 	onChange: (patch: Partial<AppSettings>) => void;
 }) {
 	const [activeTab, setActiveTab] = useState<SettingsTabId>("base");
-	const [webPortDraft, setWebPortDraft] = useState(String(props.settings.webServicePort));
 	const piPath = props.settings.customPiPath || props.piStatus?.command || "";
-	useEffect(() => {
-		setWebPortDraft(String(props.settings.webServicePort));
-	}, [props.settings.webServicePort]);
-	const applyWebPortDraft = () => {
-		const port = Number(webPortDraft);
-		if (Number.isInteger(port) && port >= 1 && port <= 65535 && port !== props.settings.webServicePort) {
-			props.onChange({ webServicePort: port });
-		} else {
-			setWebPortDraft(String(props.settings.webServicePort));
-		}
-	};
 	const tabs: Array<{
 		id: SettingsTabId;
 		label: string;
@@ -128,22 +109,16 @@ export function SettingsModal(props: {
 			icon: <Settings2 size={16} />,
 		},
 		{
-			id: "proxy",
-			label: t("settings.tabs.proxy"),
-			description: t("settings.tabs.proxyDesc"),
-			icon: <Network size={16} />,
-		},
-		{
-			id: "web",
-			label: t("settings.tabs.web"),
-			description: t("settings.tabs.webDesc"),
-			icon: <Globe2 size={16} />,
-		},
-		{
 			id: "dev",
 			label: t("settings.tabs.dev"),
 			description: t("settings.tabs.devDesc"),
 			icon: <Wrench size={16} />,
+		},
+		{
+			id: "about",
+			label: t("settings.about"),
+			description: t("settings.aboutDesc"),
+			icon: <Info size={16} />,
 		},
 	];
 	const themeOptions = [
@@ -194,18 +169,6 @@ export function SettingsModal(props: {
 								</span>
 							</button>
 						))}
-						<div className="settings-about">
-							<strong>{t("settings.about")}</strong>
-							<small>{t("settings.aboutDesc")}</small>
-							<a href={PROJECT_REPO_URL} target="_blank" rel="noreferrer">
-								<span>{t("settings.aboutCurrentRepo")}</span>
-								<code>{PROJECT_REPO_URL}</code>
-							</a>
-							<a href={UPSTREAM_REPO_URL} target="_blank" rel="noreferrer">
-								<span>{t("settings.aboutUpstreamRepo")}</span>
-								<code>{UPSTREAM_REPO_URL}</code>
-							</a>
-						</div>
 					</nav>
 					<div className="settings-panel">
 						{activeTab === "base" && (
@@ -321,163 +284,20 @@ export function SettingsModal(props: {
 								</SettingsSection>
 							</>
 						)}
-						{activeTab === "proxy" && (
-							<>
-								<SettingsSection
-									title={t("settings.piProxy")}
-									description={t("settings.piProxyDesc")}
-								>
-									<SettingSwitch
-										title={t("settings.enablePiProxy")}
-										description={t("settings.settingTakesEffectAfterRestart")}
-										checked={props.settings.piProxyEnabled}
-										onChange={(checked) =>
-											props.onChange({ piProxyEnabled: checked })
-										}
-									/>
-									{props.settings.piProxyEnabled && (
-										<div className="setting-proxy-panel">
-											<TextField
-												className="setting-field"
-												label={t("settings.proxyUrl")}
-												value={props.settings.piProxyUrl}
-												placeholder="http://127.0.0.1:7890"
-												onChange={(value) =>
-													props.onChange({ piProxyUrl: value })
-												}
-											/>
-											<TextField
-												className="setting-field"
-												label={t("settings.proxyBypass")}
-												value={props.settings.piProxyBypass}
-												placeholder="localhost,127.0.0.1,::1"
-												description={t("settings.noProxyHint")}
-												onChange={(value) =>
-													props.onChange({ piProxyBypass: value })
-												}
-											/>
-											<div className="setting-row">
-												<div>
-													<strong>{t("settings.proxyTest")}</strong>
-													<small>
-														{t("settings.proxyNoApiKey")}
-													</small>
-													{props.piProxyNotice && (
-														<small
-															className={`setting-status ${props.piProxyNoticeTone}`}
-														>
-															{props.piProxyNotice}
-														</small>
-													)}
-												</div>
-												<Button
-													onClick={props.onTestPiProxy}
-													disabled={props.piProxyChecking}
-												>
-													{props.piProxyChecking ? t("settings.testingProxy") : t("settings.testProxy")}
-												</Button>
-											</div>
-										</div>
-									)}
-								</SettingsSection>
-								<SettingsSection
-									title={t("settings.desktopProxy")}
-									description={t("settings.desktopProxyDesc")}
-								>
-									<SettingSwitch
-										title={t("settings.enableDesktopProxy")}
-										description={t("settings.desktopProxyDesc")}
-										checked={props.settings.desktopProxyEnabled}
-										onChange={(checked) =>
-											props.onChange({ desktopProxyEnabled: checked })
-										}
-									/>
-									{props.settings.desktopProxyEnabled && (
-										<div className="setting-proxy-panel">
-											<TextField
-												className="setting-field"
-												label={t("settings.proxyUrl")}
-												value={props.settings.desktopProxyUrl}
-												placeholder="http://127.0.0.1:7890"
-												onChange={(value) =>
-													props.onChange({ desktopProxyUrl: value })
-												}
-											/>
-											<TextField
-												className="setting-field"
-												label={t("settings.proxyBypass")}
-												value={props.settings.desktopProxyBypass}
-												placeholder="localhost,127.0.0.1,::1"
-												description={t("settings.electronProxyHint")}
-												onChange={(value) =>
-													props.onChange({ desktopProxyBypass: value })
-												}
-											/>
-										</div>
-									)}
-								</SettingsSection>
-							</>
-						)}
-						{activeTab === "web" && (
+						{activeTab === "about" && (
 							<SettingsSection
-								title={t("settings.webLocalService")}
-								description={t("settings.webLocalServiceDesc")}
+								title={t("settings.about")}
+								description={t("settings.aboutDesc")}
 							>
-								<SettingSwitch
-									title={t("settings.enableWebService")}
-									description={
-										props.webServiceChanging
-											? t("settings.webOpening")
-											: t("settings.webOffDesc")
-									}
-									checked={props.settings.webServiceEnabled}
-									disabled={props.webServiceChanging}
-									onChange={(checked) =>
-										props.onChange({ webServiceEnabled: checked })
-									}
-								/>
-								<div className="web-endpoint-panel">
-									<div className="web-endpoint-grid">
-										<div className="web-endpoint-metric">
-											<span>{t("common.host")}</span>
-											<code>{props.settings.webServiceHost}</code>
-										</div>
-										<label className="web-endpoint-metric editable">
-											<span>{t("common.port")}</span>
-											<input
-												type="number"
-												min={1}
-												max={65535}
-												value={webPortDraft}
-												disabled={props.webServiceChanging}
-												onChange={(event) => setWebPortDraft(event.target.value)}
-												onBlur={applyWebPortDraft}
-												onKeyDown={(event) => {
-													if (event.key === "Enter") {
-														event.preventDefault();
-														applyWebPortDraft();
-														event.currentTarget.blur();
-													}
-												}}
-											/>
-										</label>
-									</div>
-									<div className="web-endpoint-summary">
-										<span className={props.settings.webServiceEnabled ? "online" : ""} />
-										<div>
-											<strong>
-												http://127.0.0.1:{webPortDraft || props.settings.webServicePort}
-											</strong>
-											<small>{t("settings.localWebHint")}</small>
-										</div>
-										<Button
-											buttonSize="sm"
-											disabled={!props.settings.webServiceEnabled}
-											onClick={() => props.onOpenWebService(webPortDraft || String(props.settings.webServicePort))}
-										>
-											{t("common.open")}
-										</Button>
-									</div>
+								<div className="settings-about-panel">
+									<a href={PROJECT_REPO_URL} target="_blank" rel="noreferrer">
+										<span>{t("settings.aboutCurrentRepo")}</span>
+										<code>{PROJECT_REPO_URL}</code>
+									</a>
+									<a href={UPSTREAM_REPO_URL} target="_blank" rel="noreferrer">
+										<span>{t("settings.aboutUpstreamRepo")}</span>
+										<code>{UPSTREAM_REPO_URL}</code>
+									</a>
 								</div>
 							</SettingsSection>
 						)}
@@ -864,7 +684,7 @@ export function formatBytes(value: number) {
 	return `${value} B`;
 }
 
-export type SettingsTabId = "base" | "proxy" | "web" | "dev";
+export type SettingsTabId = "base" | "about" | "dev";
 
 export function SettingsSection(props: {
 	title: string;

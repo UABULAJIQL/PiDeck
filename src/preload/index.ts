@@ -304,10 +304,15 @@ const api = {
 				packageJson,
 			) as Promise<{ valid: boolean; error?: string }>,
 		/** 从 provider 的 baseUrl + apiKey 拉取可用模型列表 */
-		fetchModels: (baseUrl: string, apiKey: string, apiType?: string) =>
+		fetchModels: (
+			baseUrl: string,
+			apiKey: string,
+			apiType?: string,
+			proxyPort?: number,
+		) =>
 			ipcRenderer.invoke(
 				ipcChannels.configFetchModels,
-				{ baseUrl, apiKey, apiType },
+				{ baseUrl, apiKey, apiType, proxyPort },
 			) as Promise<{
 				success: boolean;
 				models?: Array<{ id: string; name?: string }>;
@@ -320,10 +325,11 @@ const api = {
 			modelId: string,
 			apiType?: string,
 			headers?: Record<string, string>,
+			proxyPort?: number,
 		) =>
 			ipcRenderer.invoke(
 				ipcChannels.configTestProvider,
-				{ baseUrl, apiKey, modelId, apiType, headers },
+				{ baseUrl, apiKey, modelId, apiType, headers, proxyPort },
 			) as Promise<{
 				success: boolean;
 				model?: string;

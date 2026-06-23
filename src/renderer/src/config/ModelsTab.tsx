@@ -16,6 +16,7 @@ const KNOWN_PROVIDER_FIELDS = new Set([
 	"baseUrl",
 	"api",
 	"apiKey",
+	"proxyPort",
 	"headers",
 	"authHeader",
 	"models",
@@ -558,6 +559,25 @@ export function ModelsTab(props: {
 										</div>
 
 
+										<div className="config-form-row">
+											<label>{t("config.field.proxyPort")}</label>
+											<input
+												type="number"
+												min={1}
+												max={65535}
+												value={provider.proxyPort ?? ""}
+												onChange={(e) => {
+													const value = e.target.value.trim();
+													props.onChangeProvider(
+														name,
+														"proxyPort",
+														value ? Number(value) : undefined,
+													);
+												}}
+												placeholder="7897"
+											/>
+										</div>
+
 										{/* 快速测试连接 */}
 										<div className="config-form-row">
 											<label>{t("config.testModel")}</label>
@@ -721,6 +741,18 @@ export function ModelsTab(props: {
 														}}
 													/>
 													<span>{t("config.reasoningEffort")}</span>
+												</label>
+												<label className="config-checkbox-label">
+													<input
+														type="checkbox"
+														checked={getCompat(name).useProxy === true}
+														onChange={(e) => {
+															const compat = { ...getCompat(name) };
+															compat.useProxy = e.target.checked;
+															props.onChangeProvider(name, "compat", compat);
+														}}
+													/>
+													<span>{t("config.proxy")}</span>
 												</label>
 											</div>
 										</div>

@@ -330,18 +330,16 @@ export function registerIpcHandlers({
 					"desktopProxyUrl" in patch ||
 					"desktopProxyBypass" in patch
 				) {
+					// 相关设置项已下线，但仍在持久化层兼容旧字段；
+					// 这里继续下发 direct 配置，确保历史值不会残留在 Electron 网络栈中。
 					await applyDesktopProxy(settings);
 				}
 				if ("useNativeTitleBar" in patch) {
 					settingsStore.notifyTitleBarChange(getMainWindow());
 				}
-				if (
-					"customPiPath" in patch ||
-					"piProxyEnabled" in patch ||
-					"piProxyUrl" in patch ||
-					"piProxyBypass" in patch
-				) {
-					// pi 路径或代理变更后，预热池中的旧进程配置已过期，需清空让新 agent 重新 spawn
+				if ("customPiPath" in patch || "piProxyEnabled" in patch || "piProxyUrl" in patch || "piProxyBypass" in patch) {
+					// pi 路径或历史代理字段变更后，预热池中的旧进程配置已过期，需清空让新 agent 重新 spawn。
+					// 虽然代理入口已移除，但旧配置文件仍可能带这些字段。
 					agentManager.clearWarmPool();
 				}
 				if (
@@ -349,14 +347,7 @@ export function registerIpcHandlers({
 					"webServiceHost" in patch ||
 					"webServicePort" in patch
 				) {
-					try {
-						await webServiceManager.applySettings(settings);
-					} catch (error) {
-						if (settings.webServiceEnabled) {
-							await settingsStore.update({ webServiceEnabled: false });
-						}
-						throw error;
-					}
+					await webServiceManager.applySettings(settings);
 				}
 				return settings;
 			},
@@ -560,12 +551,13 @@ export function registerIpcHandlers({
 			ipcChannels.configFetchModels,
 			(
 				_event,
-				payload: { baseUrl: string; apiKey: string; apiType?: string },
+				payload: { baseUrl: string; apiKey: string; apiType?: string; proxyPort?: number },
 			) =>
 				configManager.fetchProviderModels(
 					payload.baseUrl,
 					payload.apiKey,
 					payload.apiType,
+					payload.proxyPort,
 				),
 		);
 		// 快速测试 provider 连接
@@ -579,6 +571,7 @@ export function registerIpcHandlers({
 					modelId: string;
 					apiType?: string;
 					headers?: Record<string, string>;
+					proxyPort?: number;
 				},
 			) =>
 				configManager.testProviderConnection(
@@ -587,6 +580,7 @@ export function registerIpcHandlers({
 					payload.modelId,
 					payload.apiType,
 					payload.headers,
+					payload.proxyPort,
 				),
 		);
 	

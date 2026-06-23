@@ -404,10 +404,6 @@ export function AppOverlayLayer(props: AppLayoutProps) {
                 notice={settingsNotice}
                 piStatus={piStatus}
                 piChecking={piChecking}
-                piProxyChecking={piProxyChecking}
-                piProxyNotice={piProxyNotice}
-                piProxyNoticeTone={piProxyNoticeTone}
-                webServiceChanging={webServiceChanging}
                 appInfo={appInfo}
                 customPiPath={customPiPath}
                 customPathValidating={customPathValidating}
@@ -419,7 +415,6 @@ export function AppOverlayLayer(props: AppLayoutProps) {
                 onValidateCustomPath={() => validateCustomPiPath()}
                 onClearCustomPath={clearCustomPiPath}
                 onCheckPi={checkPiInstallInline}
-                onTestPiProxy={() => testPiProxy()}
                 onToggleDevTools={async () => {
                   const opened = await api.app.toggleDevTools();
                   setSettingsNotice(
@@ -427,9 +422,6 @@ export function AppOverlayLayer(props: AppLayoutProps) {
                   );
                 }}
                 onRestartApp={() => api.app.restart()}
-                onOpenWebService={(port: any) =>
-                  api.app.openExternal(`http://127.0.0.1:${port}`)
-                }
                 onClose={() => {
                   setSettingsOpen(false);
                   setSettingsNotice("");

@@ -377,14 +377,21 @@ export function createPreviewApi(): PiDesktopApi {
 					files: { "models.json": {}, "auth.json": {}, "settings.json": {} },
 				}),
 			import: async () => ({ valid: true }),
-			fetchModels: async () => ({
+			fetchModels: async (_baseUrl?: string, _apiKey?: string, _apiType?: string, _proxyPort?: number) => ({
 				success: true,
 				models: [
 					{ id: "gpt-4o", name: "GPT-4o" },
 					{ id: "gpt-4o-mini", name: "GPT-4o Mini" },
 				],
 			}),
-			testProvider: async () => ({
+			testProvider: async (
+				_baseUrl?: string,
+				_apiKey?: string,
+				_modelId?: string,
+				_apiType?: string,
+				_headers?: Record<string, string>,
+				_proxyPort?: number,
+			) => ({
 				success: true,
 				model: "gpt-4o-mini",
 				snippet: "Hello! How can I help you today?",
