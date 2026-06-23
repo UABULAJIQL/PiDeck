@@ -203,6 +203,21 @@ function isSameSessionPath(left?: string, right?: string) {
   );
 }
 
+function createImagePreviewObjectUrl(image: ImageContent) {
+  const binary = atob(image.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: image.mimeType }));
+}
+
+function revokeComposerImagePreviewUrl(image: ComposerImage) {
+  if (image.type === "image-asset" && image.previewUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(image.previewUrl);
+  }
+}
+
 function isReplacementForPendingAgent(agent: AgentTab, pending: AgentTab) {
   if (!pending.id.startsWith("pending-")) return false;
   if (agent.projectId !== pending.projectId || agent.cwd !== pending.cwd) {
@@ -678,6 +693,16 @@ export function App() {
   ) {
     if (!activeAgentId) return;
     setConversationAttachedImages(activeAgentId, value);
+  }
+
+  function releaseDiscardedComposerImage(image: ComposerImage) {
+    revokeComposerImagePreviewUrl(image);
+    if (image.type === "image-asset") void api.images.deleteAsset(image);
+  }
+
+  function discardAttachedImages() {
+    for (const image of attachedImages) releaseDiscardedComposerImage(image);
+    setAttachedImages([]);
   }
 
   function focusComposerTextarea() {
@@ -2684,7 +2709,7 @@ export function App() {
       if (!selected) return;
       setSlashCommandStage(null);
       setPrompt("");
-      setAttachedImages([]);
+      discardAttachedImages();
       setSuggestionsOpen(false);
       setSendBehaviorMenuOpen(false);
       const result = await api.agents.switchSession(activeAgentId, selected.value);
@@ -2703,7 +2728,7 @@ export function App() {
       if (!selected) return;
       setSlashCommandStage(null);
       setPrompt("");
-      setAttachedImages([]);
+      discardAttachedImages();
       setSuggestionsOpen(false);
       setSendBehaviorMenuOpen(false);
       await api.agents.forkSession(activeAgentId, selected.value);
@@ -2715,7 +2740,7 @@ export function App() {
       const suffix = stage.argument.trim();
       const commandText = suffix ? `/compact ${suffix}` : "/compact";
       setPrompt("");
-      setAttachedImages([]);
+      discardAttachedImages();
       setSuggestionsOpen(false);
       setSendBehaviorMenuOpen(false);
       setSlashCommandStage(null);
@@ -2726,7 +2751,7 @@ export function App() {
 
     setSlashCommandStage(null);
     setPrompt("");
-    setAttachedImages([]);
+    discardAttachedImages();
     setSuggestionsOpen(false);
     setSendBehaviorMenuOpen(false);
 
@@ -3251,7 +3276,9 @@ ${goalTextRef.current}
     const image = file.type === "image/gif"
       ? await fileToImageContent(file)
       : await resizeImageFile(file, 2000, 0.86).catch(() => fileToImageContent(file));
-    return api.images.createAsset(image);
+    const asset = await api.images.createAsset(image);
+    // 预览必须由 renderer 持有 blob URL；main 侧 file:// 资产在 Electron 页面里可能被安全策略拦截。
+    return { ...asset, previewUrl: createImagePreviewObjectUrl(image) };
   }
 
   function fileToImageContent(file: File): Promise<ImageContent> {
@@ -3348,23 +3375,14 @@ ${goalTextRef.current}
 
   /** 移除已附加的图片 */
   function removeImage(index: number) {
-    setAttachedImages((prev) => {
-      const removed = prev[index];
-      if (removed?.type === "image-asset") {
-        void api.images.deleteAsset(removed);
-      }
-      return prev.filter((_, i) => i !== index);
-    });
+    const removed = attachedImages[index];
+    if (removed) releaseDiscardedComposerImage(removed);
+    setAttachedImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   /** 清空所有附加图片 */
   function clearImages() {
-    setAttachedImages((prev) => {
-      for (const image of prev) {
-        if (image.type === "image-asset") void api.images.deleteAsset(image);
-      }
-      return [];
-    });
+    discardAttachedImages();
   }
 
   async function updateSettings(patch: Partial<AppSettings>) {
