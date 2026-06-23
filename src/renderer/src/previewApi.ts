@@ -35,6 +35,10 @@ const projects: Project[] = [
 ];
 
 let previewAgentTitle: string | null = null;
+let previewQuickPromptState = {
+	presets: createDefaultQuickPrompts(),
+	draft: "",
+};
 
 function getAgents(): AgentTab[] {
 	return [
@@ -144,8 +148,6 @@ let previewSettings: AppSettings = {
 	linkOpenMode: "external",
 	maxEditorFileSizeMB: 5,
 	providerPrefixes: {} as Record<string, string>,
-	quickPrompts: createDefaultQuickPrompts(),
-	quickPromptDraft: "",
 };
 
 export function createPreviewApi(): PiDesktopApi {
@@ -366,6 +368,16 @@ export function createPreviewApi(): PiDesktopApi {
 				message: t("preview.proxyOk"),
 			}),
 			onApplyWindow: noop,
+		},
+		quickPrompts: {
+			get: async () => ({ ...previewQuickPromptState, presets: [...previewQuickPromptState.presets] }),
+			update: async (state) => {
+				previewQuickPromptState = {
+					presets: [...state.presets],
+					draft: state.draft,
+				};
+				return { ...previewQuickPromptState, presets: [...previewQuickPromptState.presets] };
+			},
 		},
 		config: {
 			getModels: async () => ({

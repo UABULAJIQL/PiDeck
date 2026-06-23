@@ -60,11 +60,7 @@ import {
 import { shouldResetExpandedDirsForProjectChange } from "./fileTreeExpansion";
 import { syncCollapsedProjects } from "./projectCollapseState";
 import { useMessagePagination } from "./hooks/useMessagePagination";
-import {
-  useQuickPromptPresets,
-  type QuickPromptSettingsPatch,
-} from "./quickPrompts";
-import { createDefaultQuickPrompts } from "../../shared/quickPrompts";
+import { useQuickPromptPresets } from "./quickPrompts";
 import {
   AgentRun,
   AgentContextMenu,
@@ -129,6 +125,7 @@ import {
   PiInstallStatus,
   PiUpdateNoticeInfo,
   Project,
+  QuickPromptPreset,
   SessionSummary,
   ThinkingUpdate,
 } from "../../shared/types";
@@ -505,8 +502,6 @@ export function App() {
     linkOpenMode: "external",
     maxEditorFileSizeMB: 5,
     providerPrefixes: {} as Record<string, string>,
-    quickPrompts: createDefaultQuickPrompts(),
-    quickPromptDraft: "",
   });
   const [settingsNotice, setSettingsNotice] = useState("");
   const [piProxyNotice, setPiProxyNotice] = useState("");
@@ -516,13 +511,13 @@ export function App() {
   const [piStatus, setPiStatus] = useState<PiInstallStatus | null>(null);
   const [piProxyChecking, setPiProxyChecking] = useState(false);
   const [webServiceChanging, setWebServiceChanging] = useState(false);
-  const persistQuickPromptSettings = useCallback(
-    async (patch: QuickPromptSettingsPatch) => {
-      const saved = await api.settings.update(patch);
-      setSettings(saved);
-    },
-    [],
-  );
+  const getQuickPromptState = useCallback(() => api.quickPrompts.get(), []);
+  const updateQuickPromptState = useCallback(async (state: {
+    presets: QuickPromptPreset[];
+    draft: string;
+  }) => {
+    await api.quickPrompts.update(state);
+  }, []);
   const {
     quickPrompts,
     quickPromptDraft,
@@ -530,9 +525,8 @@ export function App() {
     addQuickPromptPreset,
     removeQuickPromptPreset,
   } = useQuickPromptPresets({
-    settings,
-    settingsLoaded,
-    updateSettings: persistQuickPromptSettings,
+    getState: getQuickPromptState,
+    updateState: updateQuickPromptState,
   });
   const [appInfo, setAppInfo] = useState<AppInfo>({
     version: "-",

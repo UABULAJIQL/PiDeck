@@ -31,8 +31,9 @@ import type {
 	AppSettings,
 	AppWindowBounds,
 	CreateAgentInput,
-	SendPromptInput,
 	CreatePiSkillInput,
+	QuickPromptPreset,
+	SendPromptInput,
 } from "../shared/types";
 import { ProjectStore } from "./projects/ProjectStore";
 import { FileSystemService } from "./fs/FileSystemService";
@@ -44,6 +45,7 @@ import { SessionPinStore } from "./sessions/SessionPinStore";
 import { CodexSessionImporter } from "./sessions/CodexSessionImporter";
 import { ClaudeSessionImporter } from "./sessions/ClaudeSessionImporter";
 import { SettingsStore } from "./settings/SettingsStore";
+import { QuickPromptStore } from "./quickPrompts/QuickPromptStore";
 import { applyDesktopProxy } from "./settings/DesktopProxy";
 import { GitService } from "./git/GitService";
 import { ConfigManager } from "./config/ConfigManager";
@@ -68,6 +70,7 @@ let sessionPinStore: SessionPinStore;
 let codexSessionImporter: CodexSessionImporter;
 let claudeSessionImporter: ClaudeSessionImporter;
 let settingsStore: SettingsStore;
+let quickPromptStore: QuickPromptStore;
 let gitService: GitService;
 let piLocator: PiLocator;
 let agentManager: AgentManager;
@@ -844,6 +847,13 @@ function registerIpc() {
 		ipcChannels.settingsTestPiProxy,
 		() => testPiProxy(settingsStore.get()),
 	);
+	ipcMain.handle(ipcChannels.quickPromptsGet, () => quickPromptStore.get());
+	ipcMain.handle(
+		ipcChannels.quickPromptsUpdate,
+		async (_event, state: { presets: QuickPromptPreset[]; draft: string }) => {
+			return quickPromptStore.update(state);
+		},
+	);
 
 	ipcMain.handle(ipcChannels.skillsList, async () => {
 		const result = await skillManager.list();
@@ -1111,6 +1121,7 @@ app.whenReady().then(async () => {
 	codexSessionImporter = new CodexSessionImporter();
 	claudeSessionImporter = new ClaudeSessionImporter();
 	settingsStore = new SettingsStore();
+	quickPromptStore = new QuickPromptStore();
 	gitService = new GitService();
 	piLocator = new PiLocator();
 	configManager = new ConfigManager();
@@ -1164,6 +1175,7 @@ app.whenReady().then(async () => {
 	);
 
 	await settingsStore.load();
+	await quickPromptStore.load();
 	await sessionPinStore.load();
 	await remarkStore.load();
 	await applyDesktopProxy(settingsStore.get());

@@ -188,5 +188,8 @@ export function createBrowserApi(): PiDesktopApi {
 				webServiceEnabled: true,
 			}),
 		},
+		quickPrompts: {
+			...base.quickPrompts,
+		},
 	};
 }

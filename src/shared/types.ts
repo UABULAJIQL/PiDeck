@@ -260,10 +260,6 @@ export type AppSettings = {
 	maxEditorFileSizeMB: number;
 	/** 每次新会话的第一条消息自动携带的前缀内容，按 provider 名存储 */
 	providerPrefixes: Record<string, string>;
-	/** 快捷输入预设，存到应用 settings 中以避免 renderer origin 变化导致重启后丢失。 */
-	quickPrompts: QuickPromptPreset[];
-	/** 快捷输入编辑区草稿，重启后继续保留上次未提交内容。 */
-	quickPromptDraft: string;
 
 	/** 上次退出时的窗口位置、尺寸和最大化状态，用于启动时恢复 */
 	windowState?: AppWindowState;

@@ -26,6 +26,8 @@ export const ipcChannels = {
 	settingsUpdate: "settings:update",
 	settingsTestPiProxy: "settings:test-pi-proxy",
 	settingsApplyWindow: "settings:apply-window",
+	quickPromptsGet: "quick-prompts:get",
+	quickPromptsUpdate: "quick-prompts:update",
 	skillsList: "skills:list",
 	skillsCreate: "skills:create",
 	skillsToggle: "skills:toggle",

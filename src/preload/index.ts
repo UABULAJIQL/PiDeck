@@ -27,6 +27,7 @@ import type {
 	PiSkillSummary,
 	PiUpdateNoticeInfo,
 	Project,
+	QuickPromptPreset,
 	SendPromptInput,
 	SessionSummary,
 	TerminalDataEvent,
@@ -241,6 +242,21 @@ const api = {
 			) as Promise<PiProxyTestResult>,
 		onApplyWindow: (callback: (settings: AppSettings) => void) =>
 			subscribe(ipcChannels.settingsApplyWindow, callback),
+	},
+	quickPrompts: {
+		get: () =>
+			ipcRenderer.invoke(ipcChannels.quickPromptsGet) as Promise<{
+				presets: QuickPromptPreset[];
+				draft: string;
+			}>,
+		update: (state: { presets: QuickPromptPreset[]; draft: string }) =>
+			ipcRenderer.invoke(
+				ipcChannels.quickPromptsUpdate,
+				state,
+			) as Promise<{
+				presets: QuickPromptPreset[];
+				draft: string;
+			}>,
 	},
 	config: {
 		getModels: () =>

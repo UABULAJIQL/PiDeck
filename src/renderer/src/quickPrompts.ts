@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { areQuickPromptPresetsEqual } from "../../shared/quickPrompts";
-import type { AppSettings, QuickPromptPreset } from "../../shared/types";
+import {
+  areQuickPromptPresetsEqual,
+  createDefaultQuickPrompts,
+} from "../../shared/quickPrompts";
+import type { QuickPromptPreset } from "../../shared/types";
 
-export type QuickPromptSettingsPatch = Pick<
-  AppSettings,
-  "quickPrompts" | "quickPromptDraft"
->;
+export type QuickPromptState = {
+  presets: QuickPromptPreset[];
+  draft: string;
+};
 
 type UseQuickPromptPresetsOptions = {
-  settings: QuickPromptSettingsPatch;
-  settingsLoaded: boolean;
-  updateSettings: (patch: QuickPromptSettingsPatch) => Promise<void>;
+  getState: () => Promise<QuickPromptState>;
+  updateState: (state: QuickPromptState) => Promise<void>;
 };
 
 function createQuickPromptId() {
@@ -24,67 +26,57 @@ function createQuickPromptId() {
 }
 
 export function useQuickPromptPresets({
-  settings,
-  settingsLoaded,
-  updateSettings,
+  getState,
+  updateState,
 }: UseQuickPromptPresetsOptions) {
   const [quickPrompts, setQuickPrompts] = useState<QuickPromptPreset[]>(
-    settings.quickPrompts,
+    createDefaultQuickPrompts(),
   );
-  const [quickPromptDraft, setQuickPromptDraft] = useState(
-    settings.quickPromptDraft,
-  );
-  const quickPromptSettingsHydratedRef = useRef(false);
-  const quickPromptHydratingFromSettingsRef = useRef(false);
+  const [quickPromptDraft, setQuickPromptDraft] = useState("");
+  const hydratedRef = useRef(false);
+  const lastSavedStateRef = useRef<QuickPromptState>({
+    presets: createDefaultQuickPrompts(),
+    draft: "",
+  });
 
   useEffect(() => {
-    if (!settingsLoaded || quickPromptSettingsHydratedRef.current) return;
-    const stateMatchesSettings =
-      areQuickPromptPresetsEqual(quickPrompts, settings.quickPrompts) &&
-      quickPromptDraft === settings.quickPromptDraft;
-
-    // 设置数据异步返回前，界面会先用本地初始值渲染；这里等主进程 settings 就绪后再对齐，
-    // 避免第一次真实设置回填时被误判为用户编辑。
-    if (!stateMatchesSettings) {
-      quickPromptHydratingFromSettingsRef.current = true;
-      setQuickPrompts(settings.quickPrompts);
-      setQuickPromptDraft(settings.quickPromptDraft);
-    }
-    quickPromptSettingsHydratedRef.current = true;
-  }, [
-    settingsLoaded,
-    settings.quickPrompts,
-    settings.quickPromptDraft,
-    quickPrompts,
-    quickPromptDraft,
-  ]);
+    let cancelled = false;
+    void getState()
+      .then((state) => {
+        if (cancelled) return;
+        hydratedRef.current = true;
+        lastSavedStateRef.current = state;
+        setQuickPrompts(state.presets);
+        setQuickPromptDraft(state.draft);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        hydratedRef.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getState]);
 
   useEffect(() => {
-    if (!settingsLoaded || !quickPromptSettingsHydratedRef.current) return;
-    const stateMatchesSettings =
-      areQuickPromptPresetsEqual(quickPrompts, settings.quickPrompts) &&
-      quickPromptDraft === settings.quickPromptDraft;
-
-    if (quickPromptHydratingFromSettingsRef.current) {
-      if (stateMatchesSettings) {
-        quickPromptHydratingFromSettingsRef.current = false;
-      }
-      return;
-    }
-    if (stateMatchesSettings) return;
+    if (!hydratedRef.current) return;
+    const nextState = { presets: quickPrompts, draft: quickPromptDraft };
+    const matchesLastSaved =
+      areQuickPromptPresetsEqual(
+        nextState.presets,
+        lastSavedStateRef.current.presets,
+      ) && nextState.draft === lastSavedStateRef.current.draft;
+    if (matchesLastSaved) return;
 
     const timeoutId = window.setTimeout(() => {
-      void updateSettings({ quickPrompts, quickPromptDraft }).catch(() => undefined);
+      void updateState(nextState)
+        .then(() => {
+          lastSavedStateRef.current = nextState;
+        })
+        .catch(() => undefined);
     }, 180);
     return () => window.clearTimeout(timeoutId);
-  }, [
-    settingsLoaded,
-    settings.quickPrompts,
-    settings.quickPromptDraft,
-    quickPrompts,
-    quickPromptDraft,
-    updateSettings,
-  ]);
+  }, [quickPrompts, quickPromptDraft, updateState]);
 
   const addQuickPromptPreset = useCallback(() => {
     const value = quickPromptDraft.trim();
