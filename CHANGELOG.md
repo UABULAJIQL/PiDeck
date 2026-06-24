@@ -10,7 +10,6 @@ All notable changes to PiDeck are documented here.
 
 ### 🚀 New Features
 
-- **Feishu remote-control cycle**: During this release cycle, PiDeck added Feishu bridge remote control, Feishu streaming cards v4, and dedicated maintenance docs so activity traces, confirmations, and remote actions could be handled from Feishu.
 - **Built-in file editor**: Added a Monaco-based file viewer, diff editor, and in-app save flow, with Git HEAD comparison, large-file safeguards, diff persistence, Git workspace change visibility, and related editor settings.
 - **Model configuration and discovery upgrades**: Added model input capabilities such as image input, vendor `baseUrl` → `models` endpoint auto-completion, better model-list fetching UX, and provider-level `proxyPort` / `useProxy` settings.
 - **Quick prompts and command stage**: Added app-level quick prompt presets, then expanded them with unified storage, persistence, popover management, and one-click insert, alongside a fuller slash-command stage panel.
@@ -28,7 +27,6 @@ All notable changes to PiDeck are documented here.
 
 ### 🐛 Fixes
 
-- **Feishu result rendering**: Fixed Feishu streaming-card results not rendering correctly.
 - **Deleted-file empty state**: Opening a deleted file now shows a friendly empty state instead of a hard error.
 - **Anthropic model discovery**: `/v1/models` probing and dual-path retry messaging were corrected.
 - **Pasted-image preview**: Fixed pasted-image preview behavior in the composer.
@@ -37,7 +35,7 @@ All notable changes to PiDeck are documented here.
 
 ### Removed
 
-- **Feishu and legacy remote-control cleanup**: Later cleanup work removed the Feishu integration code path while consolidating session-management behavior.
+- **Feishu remote-control cleanup**: Removed Feishu remote-control / streaming-card related implementation and the legacy remote-control path while consolidating session-management behavior.
 - **QR-based setup flow**: Removed the QR configuration flow and kept the simpler manual `App ID + App Secret` path.
 - **Built-in update / telemetry logic**: Removed built-in update telemetry logic and related legacy entry points.
 - **First-message prefix**: Removed the first-message prefix feature to simplify default prompting behavior.
