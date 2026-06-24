@@ -10,24 +10,25 @@ All notable changes to PiDeck are documented here.
 
 ### 🚀 New Features
 
-- **Built-in file editor**: Added a Monaco-based file viewer, diff editor, and in-app save flow, with Git HEAD comparison and large-file safeguards.
-- **Model configuration improvements**: The Models tab now supports model input capabilities such as image input, plus provider-level `proxyPort` / `useProxy` settings.
-- **Better model discovery**: Vendor `models` endpoints now auto-complete from `baseUrl`, and model-fetch error states are clearer.
-- **Quick prompts and command stage**: Added app-level quick prompt presets with persistence, popover management, and one-click insert, plus a fuller slash-command stage panel.
-- **Approval interactions**: Added and refined desktop approval dialogs for confirm, select, and input-style server-initiated requests.
-- **Pi extension management**: Added extension enable/disable, recommended package install flows, remarks, and project/global scope management.
-- **Desktop shell upgrades**: Added single-instance startup, window-state restore, and repository/about entry points in settings.
+- **Feishu remote-control cycle**: During this release cycle, PiDeck added Feishu bridge remote control, Feishu streaming cards v4, and dedicated maintenance docs so activity traces, confirmations, and remote actions could be handled from Feishu.
+- **Built-in file editor**: Added a Monaco-based file viewer, diff editor, and in-app save flow, with Git HEAD comparison, large-file safeguards, diff persistence, Git workspace change visibility, and related editor settings.
+- **Model configuration and discovery upgrades**: Added model input capabilities such as image input, vendor `baseUrl` → `models` endpoint auto-completion, better model-list fetching UX, and provider-level `proxyPort` / `useProxy` settings.
+- **Quick prompts and command stage**: Added app-level quick prompt presets, then expanded them with unified storage, persistence, popover management, and one-click insert, alongside a fuller slash-command stage panel.
+- **Approval interactions**: Added and refined desktop approval dialogs for confirm, select, and input-style server-initiated requests, with follow-up interaction polish.
+- **Pi extension management**: Added extension enable/disable, recommended package install flows, remarks, project/global scope management, and related onboarding improvements.
+- **Desktop shell upgrades**: Added single-instance startup, window-state restore, repository/about entry points in settings, plus desktop-centric improvements around update recommendation, restart flow, and thinking animation.
 
 ### ✨ Improvements
 
-- **Session and sidebar experience**: Improved per-project session lists, sidebar expand/collapse scroll handoff, and history pagination.
+- **Session and workspace experience**: Improved agent workspace interactions, per-project session lists, session merge behavior, history pagination, and sidebar expand/collapse scroll handoff.
 - **Long-session performance**: Reduced lag in long conversations by improving rendering and message synchronization.
-- **File workflow polish**: Expanded diff persistence, Git workspace change visibility, and related editor settings.
-- **Interaction polish**: Quick prompts, approval flow, and workspace switching feel smoother in high-frequency workflows.
-- **Docs refresh**: Simplified README content and added a `CONTRIBUTORS` entry point for the maintained fork.
+- **Extension and config UX**: Improved recommended extension packages, input visibility, onboarding, and error-state feedback when model fetching fails.
+- **Quick-input and sidebar polish**: Continued refining quick prompt popovers, session-list interaction, and sidebar scrolling behavior.
+- **Docs refresh**: Simplified README content, added a `CONTRIBUTORS` entry point, and synced bilingual homepage wording with maintenance docs.
 
 ### 🐛 Fixes
 
+- **Feishu result rendering**: Fixed Feishu streaming-card results not rendering correctly.
 - **Deleted-file empty state**: Opening a deleted file now shows a friendly empty state instead of a hard error.
 - **Anthropic model discovery**: `/v1/models` probing and dual-path retry messaging were corrected.
 - **Pasted-image preview**: Fixed pasted-image preview behavior in the composer.
@@ -36,6 +37,8 @@ All notable changes to PiDeck are documented here.
 
 ### Removed
 
+- **Feishu and legacy remote-control cleanup**: Later cleanup work removed the Feishu integration code path while consolidating session-management behavior.
+- **QR-based setup flow**: Removed the QR configuration flow and kept the simpler manual `App ID + App Secret` path.
 - **Built-in update / telemetry logic**: Removed built-in update telemetry logic and related legacy entry points.
 - **First-message prefix**: Removed the first-message prefix feature to simplify default prompting behavior.
 
